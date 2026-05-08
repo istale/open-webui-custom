@@ -180,6 +180,20 @@
 
 ---
 
+## Mockup Layout Interpretation (mockup-analysis.md)
+
+> User-designed mockup `docs/design/3panel-mockup.html` 的 right panel 是 chat history list，不是 live chat。需確認 layout 解讀。
+
+| Plan | Right panel | 備註 | Decision |
+|------|-------------|------|----------|
+| **A**（**目前採用**）| Native `<Chat>` (live conversation) | 視覺借用 mockup design tokens / 元件，layout 不變 | ✅ |
+| **B** | Mockup 原樣：chat history list | 重組 layout，charts 移其他位置 | ⏳ |
+| **C** | History list ↔ live Chat 切換 | 雙模式 right panel | ⏳ |
+
+> **2026-05-09 採 Plan A**。Day 1 完成 inventory + 真機測試後若需改變，更新此表。
+
+---
+
 ## Native Chat Integration Decision (frontend-spec.md §9)
 
 > **必須在 Day 1 inventory 中確認**：原生 `<Chat>` (src/lib/components/chat/Chat.svelte) 接收哪些 props？支援 `tool_ids` 與 `metadata` 嗎？

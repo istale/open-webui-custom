@@ -6,9 +6,13 @@
 > - [openwebui-module-inventory.md](./openwebui-module-inventory.md)（Tier 1 reuse）
 > - [tools-schema.md](./tools-schema.md)（tool calling 機制）
 > - [data-analysis-vertical-spec.md](./data-analysis-vertical-spec.md)（domain UX）
+> - [frontend-design-tokens.md](./frontend-design-tokens.md)（**視覺 design system，色彩 / 字體 / 互動 pattern**）
 > - [inventory-results.md](./inventory-results.md)（Day 1 確認過的原生 props）
+> - [docs/design/mockup-analysis.md](../design/mockup-analysis.md)（user-designed mockup 對應分析）
 >
-> **凍結原則**：這份規格鎖定**契約**（component props / event names / store shape / event flow）。不鎖實作（CSS、具體 layout DOM 結構可變）。
+> **凍結原則**：這份規格鎖定**契約**（component props / event names / store shape / event flow）。**視覺 token / 互動 pattern 由 [frontend-design-tokens.md](./frontend-design-tokens.md) 定義**，本檔不重複。
+>
+> **預設情境**：使用者在 desktop browser 全螢幕使用，不另做 responsive（依 user 確認 2026-05-09）。
 
 ---
 
@@ -61,35 +65,57 @@
 
 ### 2.1 `<DataAnalysisLayout>` (Tier 3 custom)
 - **Path**：`src/lib/components/data-analysis/DataAnalysisLayout.svelte`
-- **Props**：無
+- **Props**：
+  ```ts
+  export let leftWidth: number = 300;
+  export let rightWidth: number = 480;
+  ```
 - **Slots**：`left`、`middle`、`right`
-- **Behavior**：
-  - Desktop：CSS grid `grid-template-columns: 320px 1fr 480px`
-  - Tablet (<1280px)：`280px 1fr 400px`
-  - Mobile (<768px)：tab bar 切換（Dataset / Canvas / Chat），預設 Chat
-- **無 state**
+- **Layout**：3-column flex / grid
+  - Left: `width: {leftWidth}px`
+  - Middle: `flex: 1, min-width: 0`
+  - Right: `width: {rightWidth}px`
+- **Resizable**：
+  - Left ↔ Middle 之間放 `<Resizer side="right" onResize={...}>` (200–560px clamp)
+  - Middle ↔ Right 之間放 `<Resizer side="left" onResize={...}>` (320–640px clamp)
+  - 寬度持久化：寫進 `localStorage` key `data-analysis.layout.{leftWidth,rightWidth}`，下次開啟還原
+- **Mockup 對應**：`App` function（lines 821–886），但移除 mobile breakpoint（desktop-only per 2026-05-09 確認）
+- **無 vertical state**（widths 是 ephemeral + localStorage）
 
 ### 2.2 `<DatasetPanel>` (Tier 3 custom)
 - **Path**：`src/lib/components/data-analysis/DatasetPanel.svelte`
+- **Mockup 對應**：`LeftPanel` (lines 156–358) — 視覺結構**直接採用**
 - **Props**：
   ```ts
   export let chatId: string | null;        // 用來 update chat metadata
   export let selectedDatasetId: string;
   export let datasets: DatasetMeta[];
+  export let activeGroupFilters: string[] = [];  // 多選 OR
   ```
 - **Events**：
   ```ts
   dispatch('select-dataset', { datasetId: string })
+  dispatch('toggle-group-filter', { groupId: string })
+  dispatch('reset-filters')
   dispatch('refresh-datasets')
   ```
-- **內容**：
-  - Group filter（製造業：line / area / shift）
-  - 搜尋框
-  - Dataset list（virtualized 若 >100）
-  - 已選 dataset 的 metadata 區（rows / columns / schema / tags / updated_at）
+- **結構**（mockup LeftPanel pattern）：
+  ```
+  ┌─────────────────────────────────────┐
+  │ [Group1] [Group2] [Group3] ...  [⟲] │  ← chip filter bar (lines 188–246)
+  ├─────────────────────────────────────┤
+  │ All Datasets · 24 items             │  ← header (lines 248–259)
+  ├─────────────────────────────────────┤
+  │ ▼ GROUP NAME                    12  │  ← collapsible group header (lines 273–297)
+  │   ▼ 📂 Sub-category             5   │  ← sub-folder by dataset_type (lines 298–340)
+  │     [icon] dataset-name             │
+  │            12.4M rows · Apr 28      │  ← <DatasetRow> (lines 367–399)
+  └─────────────────────────────────────┘
+  ```
+- **Sub-grouping by dataset metadata**：依 `DatasetMeta.dataset_type` 自動分組（CSV / SQLite / JSON / Parquet 等）— 對應 mockup `TYPE_SUBFOLDER`
+- **Empty state**：見 mockup lines 344–353 — 大 emoji + "No datasets found"
 - **Loading state**：`datasets === null` → skeleton 3 row
 - **Error state**：`datasetError != null` → red banner 含 retry button → emit `refresh-datasets`
-- **Empty state**：no datasets accessible → "No datasets available. Contact admin."
 
 ### 2.3 `<CanvasFeed>` (Tier 3 custom)
 - **Path**：`src/lib/components/data-analysis/CanvasFeed.svelte`
@@ -135,6 +161,44 @@
   - Footer：`message_id` + `tool_call_id`（debug 用，admin / dev mode 才顯示）
 - **Image error handling**：`<img on:error={handleImageError}>` → 嘗試一次 reload，再失敗顯示 "Image regeneration in progress..."（依靠 backend regen fallback）
 - **Highlighted state**：1.5s CSS class（border glow + bg flash），由 prop 控制
+
+### 2.4a `<DatasetRow>` (Tier 3 custom，從 DatasetPanel 抽出)
+- **Path**：`src/lib/components/data-analysis/DatasetRow.svelte`
+- **Mockup 對應**：`FileRow` (lines 367–399)
+- **Props**：
+  ```ts
+  export let dataset: DatasetMeta;
+  export let groupColor: string;       // OKLCH from dataset.group
+  export let selected: boolean;
+  ```
+- **Events**：`dispatch('select', { datasetId: string })`
+- **Visual**：左 `<DatasetIcon>` + 中（name + row count mono）+ 右 (updated_at mono)
+- **States**：hover / selected — 依 [frontend-design-tokens.md §Pattern](./frontend-design-tokens.md#pattern互動-state-視覺)
+
+### 2.4b `<DatasetIcon>` (Tier 3 custom，視覺元件)
+- **Path**：`src/lib/components/data-analysis/DatasetIcon.svelte`
+- **Mockup 對應**：`FileIcon` (lines 96–112)
+- **Props**：
+  ```ts
+  export let datasetType: string;  // 'csv' | 'sqlite' | 'json' | 'parquet' | ...
+  export let size: 'sm' | 'md' = 'md';   // sm: 24×30 (header)、md: 36×44 (list)
+  ```
+- **Visual**：圓角 5px 框 + 對應 `--ds-{type}` 色彩（[design-tokens §Domain-specific 色彩](./frontend-design-tokens.md#domain-specific-色彩dataset-類型--chart-類型)）+ 底部 type uppercase
+
+### 2.4c `<Resizer>` (Tier 3 custom，layout 工具)
+- **Path**：`src/lib/components/data-analysis/Resizer.svelte`
+- **Mockup 對應**：`Resizer` (lines 115–155)
+- **Props**：
+  ```ts
+  export let side: 'left' | 'right';  // 視覺條對齊哪一邊
+  export let onResize: (newClientX: number) => void;
+  ```
+- **Behavior**：
+  - 7px 透明 hit zone（`position: absolute; top: 0; bottom: 0; [side]: -3px; width: 7px; cursor: col-resize`）
+  - 內含 2px 視覺條，hover/drag 時 `opacity: 0.5; height: 100%`
+  - mousedown → 全域 mousemove/mouseup 監聽 → 拖曳期間 `document.body.style.cursor` 與 `userSelect` 改寫
+- **無 state** 除了 hov / drag 兩個 boolean
+- **Caller 責任**：clamp newClientX 到合理範圍，update 寬度 store / prop
 
 ### 2.5 右欄：原生 `<Chat>`
 - **Path**：`src/lib/components/chat/Chat.svelte`（原生，**不 fork**）
@@ -425,21 +489,27 @@ metadata: object
 
 ## 11. Frontend Custom 檔案清單（Tier 3）
 
-| 檔案 | 必要性 | 預估行數 |
-|---|---|---|
-| `src/routes/(app)/workspace/data-analysis/+page.svelte` | P0 | ~200 |
-| `src/routes/(app)/workspace/data-analysis/[id]/+page.svelte` | P0 | ~250 |
-| `src/lib/components/data-analysis/DataAnalysisLayout.svelte` | P0 | ~80 |
-| `src/lib/components/data-analysis/DatasetPanel.svelte` | P0 | ~250 |
-| `src/lib/components/data-analysis/CanvasFeed.svelte` | P0 | ~200 |
-| `src/lib/components/data-analysis/ChartCardCanvas.svelte` | P0 | ~180 |
-| `src/lib/components/data-analysis/ChatPlaceholder.svelte` | P0 | ~70 |
-| `src/lib/components/data-analysis/scroll-utils.ts` | P0 | ~30 |
-| `src/lib/stores/data-analysis.ts` | P0 | ~80 |
-| `src/lib/apis/data-analysis/index.ts` | P0 | ~60（只 wrap 必要 endpoint）|
-| `src/lib/i18n/locales/{lang}/data_analysis.json` | P1 | n/a |
+| 檔案 | 必要性 | 預估行數 | Mockup 對應 |
+|---|---|---|---|
+| `src/routes/(app)/workspace/data-analysis/+page.svelte` | P0 | ~200 | — |
+| `src/routes/(app)/workspace/data-analysis/[id]/+page.svelte` | P0 | ~250 | `App` (lines 821–886) |
+| `src/lib/components/data-analysis/DataAnalysisLayout.svelte` | P0 | ~80 | `App` flex layout |
+| `src/lib/components/data-analysis/DatasetPanel.svelte` | P0 | ~280 | `LeftPanel` (156–358) |
+| `src/lib/components/data-analysis/DatasetRow.svelte` | P0 | ~80 | `FileRow` (367–399) |
+| `src/lib/components/data-analysis/DatasetIcon.svelte` | P0 | ~30 | `FileIcon` (96–112) |
+| `src/lib/components/data-analysis/Resizer.svelte` | P0 | ~60 | `Resizer` (115–155) |
+| `src/lib/components/data-analysis/CanvasFeed.svelte` | P0 | ~200 | `MiddlePanel` frame (lines 360–366), `ContentViewer` (412–483) header pattern |
+| `src/lib/components/data-analysis/ChartCardCanvas.svelte` | P0 | ~180 | adapted from `ContentViewer` body |
+| `src/lib/components/data-analysis/ChatPlaceholder.svelte` | P0 | ~70 | — (custom) |
+| `src/lib/components/data-analysis/scroll-utils.ts` | P0 | ~30 | — |
+| `src/lib/stores/data-analysis.ts` | P0 | ~80 | — |
+| `src/lib/apis/data-analysis/index.ts` | P0 | ~60 | — |
+| `src/lib/styles/data-analysis-tokens.css` | P0 | ~80 | from `frontend-design-tokens.md` |
+| `src/lib/i18n/locales/{lang}/data_analysis.json` | P1 | n/a | — |
 
-**合計：~1400 行**，10 個前端檔案。比上次（~3000 行 + 6 個檔案不含 +page.svelte 的 2700 行）**少約 60%**，因為 reuse-first。
+**合計：~1680 行**，14 個前端檔案。新增 `Resizer / DatasetIcon / DatasetRow` 是 mockup 的可重用元件，從 DatasetPanel 抽出來，比上次（~3000 行 + 自寫 streaming + 自寫 message thread）**少約 45%**，因為 reuse-first + 借 mockup design system。
+
+> Hard cap **15 個檔案**。如果接近，回頭看哪個能再合併或從 mockup 抽到更高 reuse 層級。
 
 ---
 

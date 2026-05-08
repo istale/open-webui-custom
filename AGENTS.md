@@ -22,6 +22,8 @@ Build a **data analysis vertical workspace** as a feature branch on a fork of Op
 4. `docs/spec/database-adapter.md` — Port-and-Adapter for external standalone data system
 5. `docs/spec/data-analysis-vertical-spec.md` — vertical-specific UX, persistence, chart types
 6. `docs/spec/frontend-spec.md` — frontend contracts (component props, stores, event flow, auto-scroll, native Chat integration plans A/B/C)
+7. `docs/spec/frontend-design-tokens.md` — visual design system (colors, fonts, radius, shadow, transition, interaction patterns)
+8. `docs/design/mockup-analysis.md` — analysis of user-designed 3panel-mockup.html and component mapping
 
 ## Hard Rules (non-negotiable)
 
