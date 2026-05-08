@@ -310,37 +310,254 @@ Constraints:
 
 ---
 
-## 整合 Open WebUI 的 Tool Registration
+## 整合 Open WebUI 的 Tool Registration（**已實際確認**）
+
+> **Codebase 確認結果（2026-05-08）**：Open WebUI **沒有** `register_tool(schema, handler)` API。實際機制是「DB-stored Python source code + class Tools convention + auto-spec generation」。本節是基於 codebase 實際讀過後的最終契約。
+
+### 機制三件事
+
+1. **Tool 是一個 Python 模組**，匯出 `class Tools`，每個 method = 一個 callable function。
+2. **Spec 自動產生**：`get_tool_specs(module)` 用 [convert_function_to_pydantic_model](backend/open_webui/utils/tools.py:659) 從 type hints + docstring 自動產出 OpenAI function spec。**不要手寫 JSON schema**。
+3. **Tool 存在 DB**（table `tool`，欄位 `id` / `content` / `specs`），runtime 由 [load_tool_module_by_id](backend/open_webui/utils/plugin.py:202) 從 `app.state.TOOLS` cache 取，cache miss 才從 DB `exec()`。
+
+### 我們的做法：Built-in DB-seeded + Cache-warmed
+
+```python
+# backend/open_webui/tools/data_analysis/tool_module.py
+"""Data analysis Tools class — exposes vertical capabilities to native chat.
+
+Methods become callable functions. Type hints + docstrings auto-generate
+OpenAI function specs. NO manual JSON schema writing.
+"""
+
+from typing import Any
+from open_webui.utils.data_analysis import get_repository
+from open_webui.utils.data_analysis.query_cache import get_query_cache
+from open_webui.utils.data_analysis.chart_renderer import render_matplotlib
+
+
+class Tools:
+    """Data analysis vertical workspace — manufacturing forensics."""
+
+    def __init__(self):
+        self.repo = get_repository()
+        self.query_cache = get_query_cache()
+
+    def list_datasets(self, tags: str = "", __user__: dict = None) -> dict:
+        """List datasets the user has access to.
+
+        :param tags: Optional comma-separated tag filter (e.g. "production,line-a").
+        :return: Dict with 'items' list of dataset metadata.
+        """
+        tag_list = [t.strip() for t in tags.split(",") if t.strip()] or None
+        items = self.repo.list_datasets(user_id=__user__["id"], tags=tag_list)
+        return {"items": [m.to_dict() for m in items]}
+
+    def query_dataset(
+        self,
+        dataset_id: str,
+        query: str,
+        max_rows: int = 100,
+        __user__: dict = None,
+    ) -> dict:
+        """Run a SELECT query against a registered dataset.
+
+        Returns row count and a preview. The full DataFrame is held server-side
+        and referenced by query_id for downstream tools (e.g. render_chart).
+
+        :param dataset_id: Dataset identifier from list_datasets.
+        :param query: SQL SELECT statement. Non-SELECT is rejected.
+        :param max_rows: Maximum preview rows in the response (default 100).
+        :return: Dict with query_id, row_count, columns, preview, statistics.
+        """
+        result = self.repo.execute_query(
+            dataset_id=dataset_id, sql=query,
+            user_id=__user__["id"], max_rows=10_000_000, timeout_s=30,
+        )
+        query_id = self.query_cache.put(result.df, ttl_s=3600)
+        return {
+            "query_id": query_id,
+            "row_count": result.row_count,
+            "columns": list(result.df.columns),
+            "preview": result.df.head(max_rows).to_dict(orient="records"),
+            "statistics": _compute_statistics(result.df),
+        }
+
+    def render_chart(
+        self,
+        query_id: str,
+        chart_type: str,
+        x: str,
+        y: str,
+        title: str,
+        explanation_source: str,
+        explanation_method: str,
+        explanation_fields: str,
+        facet: str = "",
+        color: str = "",
+        explanation_aggregation: str = "",
+        explanation_notes: str = "",
+        __user__: dict = None,
+        __id__: str = None,
+    ) -> dict:
+        """Render a matplotlib chart from a previous query result.
+
+        Returns an image attachment that displays inline in chat AND on
+        the analysis canvas. Supports manufacturing chart types.
+
+        :param query_id: query_id from a previous query_dataset call.
+        :param chart_type: One of: line, bar, scatter, histogram, box, heatmap, control, spc, pareto.
+        :param x: Column name for x-axis.
+        :param y: Column name for y-axis.
+        :param title: Chart title.
+        :param explanation_source: Data source description (e.g. "Line A, sensor S12, 2024-10").
+        :param explanation_method: Statistical method (e.g. "raw timeseries", "mean by batch").
+        :param explanation_fields: Comma-separated list of column names referenced.
+        :param facet: Optional column for subplot facet.
+        :param color: Optional column for color encoding.
+        :param explanation_aggregation: Optional aggregation method (sum, mean, count, ...).
+        :param explanation_notes: Optional analyst-facing notes.
+        :return: Dict with type='image' and attachment metadata for native rendering.
+        """
+        df = self.query_cache.get(query_id)
+        if df is None:
+            raise ValueError("query_id expired or not found; please re-run query_dataset")
+        # ... matplotlib render via chart_renderer module ...
+        return {
+            "type": "image",
+            "attachment": {
+                "id": chart_id,  # uuid4().hex generated server-side
+                "url": f"/api/v1/data-analysis/charts/{chart_id}.png",
+                "thumb_url": f"/api/v1/data-analysis/charts/{chart_id}.png?thumb=1",
+                "mime_type": "image/png",
+                "metadata": {
+                    "chart_type": chart_type, "title": title,
+                    "explanation": {
+                        "source": explanation_source,
+                        "method": explanation_method,
+                        "fields": [f.strip() for f in explanation_fields.split(",") if f.strip()],
+                        "aggregation": explanation_aggregation or None,
+                        "notes": explanation_notes or None,
+                        "statistics": _compute_statistics(df),
+                    },
+                    "audit": {
+                        "rendered_at": now_iso(),
+                        "renderer": "matplotlib",
+                        "raw_row_count": len(df),
+                        "query_id": query_id,
+                    },
+                },
+            },
+        }
+```
+
+### 為什麼用「flat parameter names」（`explanation_source` 而非巢狀 dict）
+
+OpenAI function calling 的 spec 對巢狀物件支援不一致（Anthropic Claude / OpenAI GPT / Ollama 等 model 解析行為不同）。用 flat string 參數最穩定，backend 內部再組裝成巢狀 metadata。
+
+### Bootstrap：Startup hook 注入到 DB + cache
 
 ```python
 # backend/open_webui/tools/data_analysis/__init__.py
 
-from open_webui.tools.registry import register_tool
-from .query_dataset import query_dataset, QUERY_DATASET_SCHEMA
-from .render_chart import render_chart, RENDER_CHART_SCHEMA
-from .summarize_data import summarize_data, SUMMARIZE_DATA_SCHEMA
-from .list_datasets import list_datasets, LIST_DATASETS_SCHEMA
-from .get_dataset_schema import get_dataset_schema, GET_DATASET_SCHEMA_SCHEMA
+import inspect
+from pathlib import Path
+from open_webui.models.tools import Tools as ToolsModel, ToolForm
+from open_webui.utils.tools import get_tool_specs
 
-DATA_ANALYSIS_TOOLS = [
-    (QUERY_DATASET_SCHEMA, query_dataset),
-    (RENDER_CHART_SCHEMA, render_chart),
-    (SUMMARIZE_DATA_SCHEMA, summarize_data),
-    (LIST_DATASETS_SCHEMA, list_datasets),
-    (GET_DATASET_SCHEMA_SCHEMA, get_dataset_schema),
-]
+BUILTIN_TOOL_ID = "builtin:data-analysis"
+SYSTEM_USER_ID = "system"
 
-def register_data_analysis_tools():
-    for schema, handler in DATA_ANALYSIS_TOOLS:
-        register_tool(
-            schema=schema,
-            handler=handler,
-            workspace_type="data-analysis",  # vertical 隔離
-            requires_auth=True
+async def register_builtin_data_analysis_tool(app):
+    """Idempotent registration — safe to call on every startup."""
+    from .tool_module import Tools as DataAnalysisTools
+
+    instance = DataAnalysisTools()
+    specs = get_tool_specs(instance)
+
+    # Read source for DB record (audit trail / fallback)
+    source_path = Path(__file__).parent / "tool_module.py"
+    content = source_path.read_text()
+
+    existing = await ToolsModel.get_tool_by_id(BUILTIN_TOOL_ID)
+    if existing is None:
+        await ToolsModel.insert_new_tool(
+            user_id=SYSTEM_USER_ID,
+            form_data=ToolForm(
+                id=BUILTIN_TOOL_ID,
+                name="Data Analysis (built-in)",
+                content=content,
+                meta={"description": "Manufacturing data analysis vertical workspace tools.",
+                      "manifest": {"builtin": True}},
+            ),
+            specs=specs,
         )
+    else:
+        await ToolsModel.update_tool_by_id(
+            BUILTIN_TOOL_ID,
+            {"content": content, "specs": specs}
+        )
+
+    # CRITICAL: warm cache so runtime uses live module, NOT DB-exec'd copy
+    app.state.TOOLS[BUILTIN_TOOL_ID] = instance
 ```
 
-> ⚠️ Open WebUI 的 tool registration 機制請參照 inventory 中 `backend/open_webui/utils/...`（待 inventory 時確認實際 API）。如果原生只支援 OpenAI tool format，沿用即可。
+### Core touch: `main.py` 一行 startup hook
+
+```python
+# backend/open_webui/main.py (around the existing app.state.TOOLS = {} init)
+
+@app.on_event("startup")
+async def _seed_vertical_tools():
+    """[core-touch] Vertical workspace tool registration."""
+    from open_webui.tools.data_analysis import register_builtin_data_analysis_tool
+    await register_builtin_data_analysis_tool(app)
+```
+
+> 此為唯一允許的 core touch。Commit 訊息加 `[core-touch]` 前綴。
+
+### Frontend：`tool_ids` 用法
+
+```ts
+// 在 data-analysis 路由送 chat completion 時：
+const payload = {
+    model: selectedModel,
+    messages: [...],
+    tool_ids: ['builtin:data-analysis'],  // 啟用我們的 vertical tools
+    metadata: {
+        workspace_type: 'data-analysis',
+        selected_dataset_id: selectedDatasetId,
+    },
+};
+```
+
+Open WebUI middleware 收到後會自動：
+1. 從 `app.state.TOOLS['builtin:data-analysis']` 取 live module
+2. 從 DB 取 specs，給 model 看
+3. Model 決定呼叫哪個 method
+4. Middleware 執行，自動注入 `__user__` / `__id__`
+5. 回傳結果包進 `<details type="tool_calls">` 渲染塊
+6. 持久化到 `chat.chat.history.messages[id]`
+
+**整套流程零自定義 SSE / 零自定 reducer**。
+
+### 參數注入：`__user__` / `__id__` / `__metadata__` / `__messages__`
+
+Method 簽名上以 `__xxx__` 開頭的參數會被 [`utils/tools.py:194`](backend/open_webui/utils/tools.py:194) 在 spec 自動移除（不出現在 LLM 看到的 schema），然後由 middleware 在 call 前注入。常用：
+- `__user__`: `{ "id": str, "name": str, "email": str, ... }`
+- `__id__`: 此 tool 的 tool_id（我們的 `builtin:data-analysis`）
+- `__metadata__`: chat metadata（含 `workspace_type` / `selected_dataset_id` 等）
+- `__messages__`: 完整訊息列表
+
+**Vertical 規格依賴**：`__user__["id"]` 用來呼叫 `DatasetRepository.execute_query(user_id=...)`，把 RBAC 一路 propagate 到外部 dataset 系統。
+
+### Valves（管理員 / 使用者層級設定）
+
+可選：在 Tools class 加 `Valves` (Pydantic) / `UserValves` 子類，admin 與 user 可在 UI 設定值。範例用途：
+- 管理員：`max_query_timeout_s`、`max_chart_size`
+- 使用者：`preferred_dataset_id`、`default_chart_dpi`
+
+詳細寫法參考其他 builtin tool 範例（升級 inventory 時順便看）。
 
 ---
 
