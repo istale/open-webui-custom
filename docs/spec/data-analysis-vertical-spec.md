@@ -136,23 +136,29 @@ TTL = 1 hour. If `render_chart` gets cache miss, raise `ToolError("query_id expi
 
 ## 6. Frontend Structure
 
+> **完整前端規格見 [frontend-spec.md](./frontend-spec.md)**。本節僅給高階概觀。
+
 ```
-src/routes/(app)/data-analysis/
-└── +page.svelte               # 3-panel layout shell
-                               # - LEFT: <DatasetPanel>
-                               # - MIDDLE: <CanvasFeed>
-                               # - RIGHT: <Chat> (Open WebUI native)
+src/routes/(app)/workspace/data-analysis/
+├── +page.svelte                  # welcome / new-analysis 入口（無 chat id）
+└── [id]/+page.svelte             # 帶 chat id 的工作區
 
 src/lib/components/data-analysis/
-├── DatasetPanel.svelte        # left panel: dataset selection + meta
-├── CanvasFeed.svelte          # middle panel: chart feed + auto-scroll
-└── ChartCardCanvas.svelte     # single chart card in canvas
+├── DataAnalysisLayout.svelte     # 三 panel grid（responsive）
+├── DatasetPanel.svelte           # left
+├── CanvasFeed.svelte             # middle (derived from message.toolCalls[])
+├── ChartCardCanvas.svelte        # single chart card
+├── ChatPlaceholder.svelte        # in-chat 「📊 已加到分析畫布」
+└── scroll-utils.ts               # auto-scroll helper
+
+src/lib/stores/data-analysis.ts   # selectedDatasetId / datasets / workspaceEvents
+src/lib/apis/data-analysis/       # endpoint wrappers
 ```
 
 - Right-panel `<Chat>` is `import Chat from '$lib/components/chat/Chat.svelte'` — **native, unmodified**
-- Pass `metadata={{ workspace_type: 'data-analysis', selected_dataset_id }}` for context
-- Chat tools list filtered to data-analysis tools only
+- Pass `tool_ids={['builtin:data-analysis']}` and `metadata={{ workspace_type: 'data-analysis', ... }}`
 - `CanvasFeed` derives from `$: messages` of the active chat → flatMap toolCalls → filter render_chart results
+- 前端 hard cap：~1400 行，10 個檔案（詳見 [frontend-spec.md §11](./frontend-spec.md#11-frontend-custom-檔案清單tier-3)）
 
 ## 7. Acceptance Criteria
 

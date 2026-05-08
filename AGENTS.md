@@ -21,6 +21,7 @@ Build a **data analysis vertical workspace** as a feature branch on a fork of Op
 3. `docs/spec/tools-schema.md` — vertical features expressed as native tool calls
 4. `docs/spec/database-adapter.md` — Port-and-Adapter for external standalone data system
 5. `docs/spec/data-analysis-vertical-spec.md` — vertical-specific UX, persistence, chart types
+6. `docs/spec/frontend-spec.md` — frontend contracts (component props, stores, event flow, auto-scroll, native Chat integration plans A/B/C)
 
 ## Hard Rules (non-negotiable)
 

@@ -180,6 +180,39 @@
 
 ---
 
+## Native Chat Integration Decision (frontend-spec.md §9)
+
+> **必須在 Day 1 inventory 中確認**：原生 `<Chat>` (src/lib/components/chat/Chat.svelte) 接收哪些 props？支援 `tool_ids` 與 `metadata` 嗎？
+
+| Plan | Triggered when | Effort | Decision |
+|------|----------------|--------|----------|
+| **A** native `<Chat>` 已支援 `tool_ids` + `metadata` props | 直接傳 props | 0 | ⏳ |
+| **B** 原生 `<Chat>` 不接受這些 props，但走 fetch | service worker / fetch interceptor | medium | ⏳ |
+| **C** 原生 `<Chat>` 完全鎖死 | `[core-touch]` 加 2 個 props (`extraToolIds`, `extraMetadata`) | low (1 commit) | ⏳ |
+
+**決策**：<選一個，記在這>
+
+## Sidebar Entry Decision (frontend-spec.md §1.2)
+
+> **必須在 Day 1 確認**：原生 sidebar 怎麼加 vertical entry？
+
+- [ ] Plugin / dynamic registration mechanism exists (preferred)
+- [ ] Hard-coded list — requires `[core-touch] Sidebar.svelte`
+- [ ] Other mechanism: <describe>
+
+**決策**：
+
+## Native ResponseMessage Image Rendering Hook (frontend-spec.md §6)
+
+> **必須在 Day 1 確認**：原生看到 `tool_calls.result.attachment.type === 'image'` 怎麼渲染？我們要改成 placeholder（小卡片）需要走哪條路？
+
+- [ ] **Path-FE-A**: 原生支援 `attachment.metadata.render_mode = 'placeholder'`
+- [ ] **Path-FE-B**: 需 wrap / cascade context
+- [ ] **Path-FE-C**: CSS hide + DOM inject
+- [ ] **Other**:
+
+**決策**：
+
 ## Open Questions
 
 > Things we couldn't determine from code reading alone. Flag for user / domain expert.
