@@ -310,3 +310,23 @@ dist
 cypress/videos
 cypress/screenshots
 .vscode/settings.json
+
+# === Vertical workspace ===
+# Local dev cache (chart PNGs, query result cache, etc.)
+data/cache/
+backend/open_webui/data/cache/
+
+# Local env overrides
+.env.local
+.env.vertical
+
+# Editor / agent transient files
+.aider*
+.cursor/
+.codex/
+.claude/
+
+# Python tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
