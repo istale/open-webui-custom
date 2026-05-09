@@ -1,5 +1,7 @@
 # Open WebUI Module Inventory — Reuse-First Audit
 
+> ⚡ **Quick reference**: [`openwebui-module-inventory.brief.md`](./openwebui-module-inventory.brief.md) — 純契約。**修改本檔時必須同步更新 brief 版**。
+>
 > **目的**：在寫第一行 vertical workspace code 之前，把 Open WebUI 既有可重用模組全部列出來。每個模組標記 Tier、整合策略、相依性深度。
 >
 > **規則**：能 compose 就不要 extend，能 extend 就不要 fork，能 fork 就不要重寫。

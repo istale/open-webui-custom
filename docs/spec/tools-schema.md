@@ -1,5 +1,7 @@
 # Vertical Workspace Tools Schema — 用 Tool Calling 表達 Vertical 需求
 
+> ⚡ **Quick reference**: [`tools-schema.brief.md`](./tools-schema.brief.md) — 純契約。**修改本檔時必須同步更新 brief 版**。
+>
 > **核心原則**：vertical 想做的「特殊事件」（plan / card / chart / dataset query）一律表達成 **Open WebUI 原生 tool calls**，不自定義 SSE event。
 >
 > **典範轉移**：你不是「自己寫 streaming + 渲染管線」，你是「**註冊 tools**」，讓原生 chat 用。

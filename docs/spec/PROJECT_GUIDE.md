@@ -1,5 +1,7 @@
 # Vertical Workspace Project — Day 0 Bootstrap
 
+> ⚡ **Quick reference**: [`PROJECT_GUIDE.brief.md`](./PROJECT_GUIDE.brief.md) — 純契約。**修改本檔時必須同步更新 brief 版**。
+>
 > **複製到新 repo 的 README.md 起手式。包含：reuse-first 哲學、初始 commit 結構、第一週路徑。**
 
 ---

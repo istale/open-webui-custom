@@ -1,5 +1,7 @@
 # Data Analysis Vertical Workspace — Spec
 
+> ⚡ **Quick reference**: [`data-analysis-vertical-spec.brief.md`](./data-analysis-vertical-spec.brief.md) — 純契約。**修改本檔時必須同步更新 brief 版**。
+>
 > **Vertical**: Manufacturing data analysis (multi-time × multi-space × multi-batch × multi-sample monitoring)
 > **Scale**: 1M–10M data points per query is normal
 > **Users**: Process / quality engineers reviewing line health, doing forensic analysis, generating reports

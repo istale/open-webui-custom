@@ -1,5 +1,7 @@
 # Database Adapter — 對接外部 Standalone 資料系統
 
+> ⚡ **Quick reference**: [`database-adapter.brief.md`](./database-adapter.brief.md) — 純契約。**修改本檔時必須同步更新 brief 版**。
+>
 > **背景**：Vertical workspace 不直接管理生產資料庫，原始 dataset / sensor 資料由**另一個 standalone 系統維護**（可能是 IT 既有的 manufacturing data platform、historian、data lake 等）。
 >
 > **目的**：在 vertical workspace 與外部系統之間定義一條**穩定、版本化、可換的整合介面**。
