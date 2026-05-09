@@ -1,5 +1,7 @@
 # Frontend Spec — Data Analysis Vertical Workspace
 
+> ⚡ **Quick reference**: [`frontend-spec.brief.md`](./frontend-spec.brief.md) — 純契約、無概念說明，給已熟此份的工程師反覆查。**修改本檔時必須同步更新 brief 版**。
+>
 > **目的**：把前端從「3 個 Svelte 檔名」展開成可實作的契約。Code agent 在 Day 6 寫 UI 之前必讀。
 >
 > **依賴**：
@@ -304,24 +306,29 @@ const handleChatClick = (chat) => {
 
 ### 1.8 Step-by-step 使用者流程（從 0 到看到第一張圖）
 
-新使用者第一次操作的完整路徑：
+新使用者第一次操作的完整路徑（含 event ledger emit 點，詳見 [`event-ledger.md`](./event-ledger.md)）：
 
-| Step | User 動作 | URL | 主內容變化 | 後台動作 |
-|---|---|---|---|---|
-| 1 | 開 app | `/` | Open WebUI 首頁 | — |
-| 2 | 點 sidebar 的「📊 Data Analysis」 | `/workspace/data-analysis` | 三欄出現，中右欄空狀態 | layout mount、訂閱 stores |
-| 3 | 看到左欄 dataset list（loading skeleton 1–2 秒）| 同上 | dataset 載入完成 | `list_datasets` tool 呼叫（**後端**）|
-| 4 | 點選某個 dataset | 同上 | 左欄該 row selected、中欄仍空 | `selectedDatasetId` store 更新 |
-| 5 | 在右欄輸入「show monthly trend」按 Enter | 同上 → `/workspace/data-analysis/{newId}` | URL 改變，layout 不重 mount | (1) `createNewChat` API 建 vertical chat<br>(2) 寫入 metadata `{ workspace_type, selected_dataset_id }`<br>(3) `goto(...)` URL 改 |
-| 6 | 看到右欄 user 訊息泡泡，下方 thinking 動畫 | 同上 | `<Chat>` 接管 streaming | 開始送 chat completion，model 生成 |
-| 7 | Model 決定呼叫 `query_dataset` | 同上 | 右欄出現 tool call 「Executing…」 | Backend execute query、回傳 query_id + preview |
-| 8 | Model 決定呼叫 `render_chart` | 同上 | 右欄 tool call 「Executing…」 | Backend matplotlib render PNG → 存 cache → 回傳 attachment |
-| 9 | 中欄 canvas 出現第一張卡片（appear animation）+ 自動 scroll 到底 | 同上 | `canvasCards` reactive 增加 | image url fetch from `/api/v1/data-analysis/charts/{id}.png` |
-| 10 | 右欄訊息渲染完成，顯示 placeholder「📊 已加到分析畫布 [定位]」 | 同上 | 文字內容流式完成 | message done=true、metadata 持久化 |
-| 11 | 使用者點 placeholder 的「定位」 | 同上 | 中欄對應 card 被 scroll + 1.5s highlight | DOM scrollIntoView + class toggle |
-| 12 | 使用者繼續輸入下一句「跟去年比」 | 同上 | 右欄新訊息 + 中欄追加新 card（自動 scroll）| 重複 6–10 |
+| Step | User 動作 | URL | 主內容變化 | 後台動作 | Emit event |
+|---|---|---|---|---|---|
+| 1 | 開 app | `/` | Open WebUI 首頁 | — | — |
+| 2 | 點 sidebar 的「📊 Data Analysis」 | `/workspace/data-analysis` | 三欄出現，中右欄空狀態 | layout mount、訂閱 stores | `workspace.opened` |
+| 3 | 看到左欄 dataset list（loading skeleton 1–2 秒）| 同上 | dataset 載入完成 | `list_datasets` tool 呼叫（**後端**）| — |
+| 4 | 點選某個 dataset | 同上 | 左欄該 row selected、中欄仍空 | `selectedDatasetId` store 更新 | `dataset.selected` |
+| 5 | 在右欄輸入「show monthly trend」按 Enter | 同上 → `/workspace/data-analysis/{newId}` | URL 改變，layout 不重 mount | (1) `createNewChat` API 建 vertical chat<br>(2) 寫入 metadata `{ workspace_type, selected_dataset_id }`<br>(3) `goto(...)` URL 改 | `prompt.submitted` |
+| 6 | 看到右欄 user 訊息泡泡，下方 thinking 動畫 | 同上 | `<Chat>` 接管 streaming | 開始送 chat completion，model 生成 | — |
+| 6a | Model 寫完 `<think>...</think>` block | 同上 | thinking 區塊在訊息上方收合 | streaming forwarder 偵測到 `</think>` boundary | `model.thinking_completed` |
+| 7 | Model 決定呼叫 `query_dataset` | 同上 | 右欄出現 tool call 「Executing…」 | Backend execute query、回傳 query_id + preview | `tool.query_dataset.succeeded` 或 `.failed` |
+| 8 | Model 決定呼叫 `render_chart` | 同上 | 右欄 tool call 「Executing…」 | Backend matplotlib render PNG → 存 cache → 回傳 attachment | `tool.render_chart.succeeded` 或 `.failed` |
+| 9 | 中欄 canvas 出現第一張卡片（appear animation）+ 自動 scroll 到底 | 同上 | `canvasCards` reactive 增加 | image url fetch from `/api/v1/data-analysis/charts/{id}.png` | `chart.rendered`（前端 mount 時）|
+| 10 | 右欄訊息渲染完成，顯示 placeholder「📊 已加到分析畫布 [定位]」 | 同上 | 文字內容流式完成 | message done=true、metadata 持久化 | `message.assistant_completed` |
+| 11 | 使用者點 placeholder 的「定位」 | 同上 | 中欄對應 card 被 scroll + 1.5s highlight | DOM scrollIntoView + class toggle | `chart.locate_clicked`（backlog）|
+| 12 | 使用者繼續輸入下一句（直接打 / 點 follow-up）| 同上 | 右欄新訊息 + 中欄追加新 card（自動 scroll）| 重複 6–10 | `followup.clicked`（若點 follow-up）+ `prompt.submitted` |
+| ⚠ | streaming 卡 30s 無 event | 同上 | `<ChatPlaceholder>` 顯示中斷訊息 | `streamDataAnalysis` idle timeout abort | `stream.timeout` |
+| ⚠ | User 點 stop 按鈕 | 同上 | streaming 中止 | abort controller signal | `stream.aborted` |
 
-每一格的「後台動作」對應 Day 4–5 backend tools 與 Day 6 frontend wiring 的具體任務。團隊在實作時可以對照這張表 review「我們做到第幾步」。
+每一格的「後台動作」對應 Day 4–5 backend tools 與 Day 6 frontend wiring 的具體任務。團隊實作時可對照這張表 review「我們做到第幾步」。
+
+「Emit event」欄位是 [`event-ledger.md`](./event-ledger.md) 的 12 個 P0 events 觸發點 — 實作每步時要記得 wire 對應的 `log_event(...)` 呼叫。
 
 ---
 

@@ -1,5 +1,7 @@
 # Frontend Design Tokens
 
+> ⚡ **Quick reference**: [`frontend-design-tokens.brief.md`](./frontend-design-tokens.brief.md) — 純 token 表、無 pattern 解釋。**修改本檔時必須同步更新 brief 版**。
+>
 > **來源**：`docs/design/3panel-mockup.html`（user-designed React 原型，2026-05-08）
 > **用途**：vertical workspace 統一視覺語言。所有 Svelte 元件 CSS 一律用以下 CSS variables，禁止 hardcode 顏色。
 >

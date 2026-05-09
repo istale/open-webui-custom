@@ -38,7 +38,17 @@ concept → diagram → table → step-by-step → code → anti-patterns.
 - **Working branch**: `vertical/data-analysis` (do all work here)
 - **Upstream remote**: `https://github.com/open-webui/open-webui` (for periodic sync)
 
+## Spec Versions
+
+每份 spec 維護兩版（policy 詳見 [`docs/spec/README.md`](docs/spec/README.md)）：
+- `<name>.md` — Teaching version：含概念、why、step-by-step、anti-patterns
+- `<name>.brief.md` — Brief / Contract：純決策、schema、清單，給已熟此份的反覆查用
+
+**改 spec 時兩版必須同 commit 提交。**
+
 ## Reading Order (mandatory before writing code)
+
+第一次讀 → teaching 版；之後查 → brief 版。
 
 1. `docs/spec/PROJECT_GUIDE.md` — overall philosophy & day-by-day plan
 2. `docs/spec/openwebui-module-inventory.md` — what to reuse from Open WebUI (Tier 1/2/3)
@@ -48,6 +58,7 @@ concept → diagram → table → step-by-step → code → anti-patterns.
 6. `docs/spec/frontend-spec.md` — frontend contracts (component props, stores, event flow, auto-scroll, native Chat integration plans A/B/C)
 7. `docs/spec/frontend-design-tokens.md` — visual design system (colors, fonts, radius, shadow, transition, interaction patterns)
 8. `docs/design/mockup-analysis.md` — analysis of user-designed 3panel-mockup.html and component mapping
+9. `docs/spec/event-ledger.md` — analytics event ledger table; behavioral data for ML / product analytics; soft delete; emit points across tool / frontend / streaming
 
 ## Hard Rules (non-negotiable)
 
