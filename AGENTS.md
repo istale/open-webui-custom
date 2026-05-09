@@ -6,6 +6,30 @@
 
 Build a **data analysis vertical workspace** as a feature branch on a fork of Open WebUI. Reuse Open WebUI's chat lifecycle, message tree, history, RBAC. Add only what's vertical-specific.
 
+## Spec Reading Posture（重要）
+
+The team that owns this project has **limited frontend/backend experience and is
+encountering Open WebUI for the first time**. Spec docs in `docs/spec/` are
+written as **teaching documents**, not minimalist contracts:
+
+- They explain **what** + **why** + **how** (concept → reasoning → step-by-step)
+- They include diagrams, tables, code snippets, and walkthroughs
+- They label anti-patterns explicitly
+- They cross-reference each other liberally
+
+**Do not skim**. The redundancy is intentional — if you skip the "why" sections
+and only read the contracts, you'll make the same mistakes the previous attempt
+made (custom modules, parallel state, ignored native lifecycle).
+
+Likewise, **when you write code** that the team will read:
+- Comment the **non-obvious why**, not the obvious what
+- Match the spec's level of detail in PR descriptions
+- Don't assume the reader knows SvelteKit / FastAPI / Open WebUI — link spec
+  sections that explain the concept
+
+This applies to all spec updates you make. Match the existing style:
+concept → diagram → table → step-by-step → code → anti-patterns.
+
 ## Repo Topology
 
 - **Fork**: `https://github.com/istale/open-webui-custom`
