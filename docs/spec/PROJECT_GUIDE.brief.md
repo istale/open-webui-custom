@@ -78,16 +78,20 @@ Tier 3 hard cap: **15 frontend files + minimal backend**。
 
 ## Week 1 Path
 
-| Day | Goal | Tag |
-|---|---|---|
-| 0 | Repo + spec docs committed | `bootstrap-day-0` |
-| 1 | Open WebUI inventory complete | `inventory-done` |
-| 2 | Vertical UX spec written | — |
-| 3 | DatasetRepository Port + InMemory adapter + fixtures | — |
-| 4 | First tool: `list_datasets` end-to-end | — |
-| 5 | `query_dataset` + `render_chart` + image endpoint | `tools-done` |
-| 6 | Three-panel + canvas feed + scroll | `mvp-frontend` |
-| 7 | RBAC + persistence + ledger emit | `mvp-day-7` |
+每個 tag 對應 **review checkpoint**（必停，等 ✅ APPROVED）。
+
+| Day | Goal | Tag | CP |
+|---|---|---|---|
+| 0 | Bootstrap | `bootstrap-day-0` | initial |
+| 1 | Inventory + 3 Plans 決定 | `inventory-done` | **CP-1** |
+| 2-3 | Port + adapters + fault injection | `adapter-done` | **CP-2** |
+| 4 | `list_datasets` E2E | `first-tool-e2e` | **CP-3** |
+| 5 | All tools + 9 chart types + image endpoint | `tools-done` | **CP-4** |
+| 5 | Event ledger + 12 P0 emit | `ledger-done` | **CP-5** |
+| 6 | 3-panel + canvas + auto-scroll + sidebar | `mvp-frontend` | **CP-6** |
+| 7 | DOD acceptance | `mvp-day-7` | **CP-7** |
+
+詳見 [`docs/review-protocol.md`](../review-protocol.md)。
 
 ---
 

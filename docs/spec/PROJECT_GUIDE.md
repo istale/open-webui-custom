@@ -129,18 +129,22 @@ git tag bootstrap-day-0
 
 ## Week 1 — Path
 
-| Day | Goal | Deliverable |
-|---|---|---|
-| 0 | Repo skeleton + spec docs committed | `bootstrap-day-0` tag |
-| 1 | **Inventory** — read Tier 1 modules, fill in inventory checklist | Updated `openwebui-module-inventory.md` |
-| 2 | Vertical spec — three-panel UX, persistence strategy, auth model | `docs/spec/{vertical}-spec.md` |
-| 3 | Define Port + InMemory adapter + fixtures | `repository.py` + `in_memory_adapter.py` + fixtures |
-| 4 | First tool: `list_datasets` end-to-end via native chat | LLM can list datasets via tool call |
-| 5 | Tool: `query_dataset` + `render_chart` | LLM can produce a chart attachment |
-| 6 | Three-panel shell + canvas feed (derived from `message.toolCalls[]`) | Visible vertical workspace |
-| 7 | RBAC verification + persistence smoke test (reload, branch, regenerate) | Shippable MVP |
+每個 Day 結束的 tag 對應一個 **review checkpoint**，agent 必須停下等 user APPROVED 才繼續（詳見 [`docs/review-protocol.md`](../review-protocol.md)）。
+
+| Day | Goal | Tag | Checkpoint |
+|---|---|---|---|
+| 0 | Repo skeleton + spec docs committed | `bootstrap-day-0` | (initial state) |
+| 1 | **Inventory** — read Tier 1 modules, fill `inventory-results.md`, decide Plan A/B/C × 3 | `inventory-done` | **CP-1** |
+| 2–3 | Define Port + InMemory + HTTP adapters + fault injection + tests | `adapter-done` | **CP-2** |
+| 4 | First tool E2E: `list_datasets` callable from native chat | `first-tool-e2e` | **CP-3** |
+| 5 | Remaining tools: `query_dataset` + `render_chart` (9 chart types) + summarize / get_schema + image endpoint | `tools-done` | **CP-4** |
+| 5 | Event ledger: DB migration + worker + 12 P0 events emit | `ledger-done` | **CP-5** |
+| 6 | Three-panel shell + canvas feed + native chat integration + auto-scroll + sidebar entry | `mvp-frontend` | **CP-6** |
+| 7 | RBAC + persistence + acceptance criteria 全綠 | `mvp-day-7` | **CP-7** |
 
 After Week 1: switch InMemory adapter to HTTP adapter against staging external system.
+
+> Day 5 同時包 tools-done 跟 ledger-done — 看實作順序，建議先 tools 再 ledger（ledger 整合需要 tool 已 emit）。
 
 ---
 

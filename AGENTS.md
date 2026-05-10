@@ -60,6 +60,46 @@ concept → diagram → table → step-by-step → code → anti-patterns.
 8. `docs/design/mockup-analysis.md` — analysis of user-designed 3panel-mockup.html and component mapping
 9. `docs/spec/event-ledger.md` — analytics event ledger table; behavioral data for ML / product analytics; soft delete; emit points across tool / frontend / streaming
 10. `docs/UPSTREAM_PATCHES.md` — fork maintenance log; every `[core-touch]` modification recorded here; checklist for monthly upstream rebase
+11. `docs/review-protocol.md` — **review checkpoint protocol** — 7 mandatory stop points + 3 event triggers; handoff doc template; 3-option decision flow (✅ APPROVED / ✏️ REVISE / 🔀 PIVOT)
+12. `docs/review-log.md` — running log of all review decisions
+
+## Checkpoint Behavior (mandatory)
+
+This project uses **stop-and-review checkpoints** to catch errors early.
+At each checkpoint you MUST:
+
+1. **STOP all coding** when checkpoint trigger condition is met
+2. **Tag** the milestone (e.g. `git tag inventory-done`)
+3. **Push** branch + tag
+4. **Produce handoff doc** following template in [`docs/review-protocol.md`](docs/review-protocol.md)
+   - Either commit it to `docs/handoffs/CP-X-<tag>.md` OR paste it in
+     conversation
+5. **Wait** for user to respond with one of:
+   - ✅ APPROVED → proceed to next checkpoint
+   - ✏️ REVISE → fix listed items, re-submit same checkpoint
+   - 🔀 PIVOT → re-direction, may skip / redo / re-plan
+
+**You may not advance past a checkpoint without ✅ APPROVED.**
+
+The 7 sequential checkpoints:
+
+| # | Tag | When |
+|---|---|---|
+| 1 | `inventory-done` | All Tier 1/2 modules read, decisions made |
+| 2 | `adapter-done` | Port + InMemory + tests green |
+| 3 | `first-tool-e2e` | `list_datasets` callable from native chat |
+| 4 | `tools-done` | All 5 tools + 9 chart_types + image endpoint |
+| 5 | `ledger-done` | DB migration + worker + 12 P0 events |
+| 6 | `mvp-frontend` | 3-panel + canvas + auto-scroll + sidebar entry |
+| 7 | `mvp-day-7` | All acceptance criteria green |
+
+Plus 3 event triggers (any time):
+
+- **ET-1 Spec Discrepancy**: codebase contradicts spec → STOP, propose spec fix
+- **ET-2 Core Touch Needed** (beyond P-001): STOP, present Plan A/B/C
+- **ET-3 Scope Creep**: > 15 frontend files / +30% time / new requirement → STOP, present Cut/Defer/Expand options
+
+Full protocol: [`docs/review-protocol.md`](docs/review-protocol.md).
 
 ## Hard Rules (non-negotiable)
 
