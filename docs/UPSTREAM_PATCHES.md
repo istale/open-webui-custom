@@ -61,7 +61,7 @@ npm test
 - **File**: `backend/open_webui/main.py`
 - **Lines**: ~5 lines（見 commit）
 - **Commit prefix**: `[core-touch]`
-- **First introduced**: TBD（Day 5–6 工程實作時加上）
+- **First introduced**: 2026-05-11 (`a608bb6d6` — `[core-touch] feat: register data analysis list_datasets tool`)
 - **Why required**:
   Open WebUI 沒有 tool plugin / dynamic registration API。Tools 必須存在 DB 表中。
   最乾淨方式：在既有 `lifespan(app)` startup path 把我們 vertical 自帶的
