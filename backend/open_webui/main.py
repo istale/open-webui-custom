@@ -740,6 +740,10 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             log.warning(f'Failed to initialize terminal servers at startup: {e}')
 
+    # [core-touch] Seed vertical tools after native tool-server setup and before readiness.
+    from open_webui.tools.data_analysis import register_builtin_data_analysis_tool
+    await register_builtin_data_analysis_tool(app)
+
     # Mark application as ready to accept traffic from a startup perspective.
     app.state.startup_complete = True
 
