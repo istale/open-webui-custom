@@ -86,6 +86,7 @@ dependencies = [
     "beautifulsoup4==4.14.3",
     "pypandoc==1.16.2",
     "pandas==3.0.1",
+    "duckdb==1.5.2",
     "openpyxl==3.1.5",
     "pyxlsb==1.0.10",
     "xlrd==2.0.2",
