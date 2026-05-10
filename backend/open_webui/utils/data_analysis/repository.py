@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
-import pandas as pd
+if TYPE_CHECKING:
+    import pandas as pd
 
 
 @dataclass(frozen=True)
@@ -30,7 +31,7 @@ class DatasetMeta:
 
 @dataclass(frozen=True)
 class QueryResult:
-    df: pd.DataFrame
+    df: 'pd.DataFrame'
     row_count: int
     truncated: bool
     elapsed_ms: int
