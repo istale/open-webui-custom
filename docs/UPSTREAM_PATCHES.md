@@ -79,6 +79,14 @@ npm test
       from open_webui.tools.data_analysis import register_builtin_data_analysis_tool
       await register_builtin_data_analysis_tool(app)
   ```
+- **Upstream interaction notes** (post-sync 2026-05-09 to `f51d2b026`):
+  - Upstream 加了 `app.state.TOOL_CONTENTS = {}` (`main.py:983`) +
+    cache invalidation logic (`utils/tools.py:194-198`)
+  - 我們的 `register_builtin_data_analysis_tool` 必須**同時**設
+    `app.state.TOOL_CONTENTS[BUILTIN_TOOL_ID] = content`，否則第一次
+    tool resolution 時會把 live instance 替換成 DB-exec 出來的
+  - 此調整已寫入 [`tools-schema.md`](./spec/tools-schema.md)
+    與 [`tools-schema.brief.md`](./spec/tools-schema.brief.md)
 
 ---
 

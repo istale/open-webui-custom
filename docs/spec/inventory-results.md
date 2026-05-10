@@ -18,13 +18,24 @@
 
 ## Pre-confirmed (already verified, do not re-read unless suspicious)
 
-| Item | Status | Reference commit |
-|---|---|---|
-| Tool registration mechanism (DB-stored Python + class Tools) | ✅ confirmed | `289f106b6` |
-| `app.state.TOOLS = {}` cache, init at `main.py:973` | ✅ confirmed | `289f106b6` |
-| `get_tool_specs(module)` auto-generates from type hints + docstrings | ✅ confirmed | `289f106b6` |
-| `__user__` / `__id__` / `__metadata__` / `__messages__` injection | ✅ confirmed | `289f106b6` |
-| `tool_ids` in form_data triggers tool resolution | ✅ confirmed | `289f106b6` |
+驗證對象：upstream `f51d2b026`（2026-05-09 sync 後）。Line numbers shifted slightly from earlier `8dae237a0` baseline.
+
+| Item | Status | Reference commit | Note |
+|---|---|---|---|
+| Tool registration mechanism (DB-stored Python + class Tools) | ✅ confirmed | `289f106b6` re-verified post-sync | structure unchanged |
+| `app.state.TOOLS = {}` cache, init at `main.py:982` | ✅ confirmed | post-sync | 原 line 973，shifted |
+| **`app.state.TOOL_CONTENTS = {}` cache (NEW upstream)**, init at `main.py:983` | ⚠️ **NEW from upstream sync** | post-sync | Cache invalidation key — registration code MUST also seed `TOOL_CONTENTS[id] = content` 否則 live instance 會被覆蓋（spec 已更新）|
+| Tool resolution check (`utils/tools.py:194-198`) | ⚠️ Updated | post-sync | 從 `if module is None` 改成 `if module is None or TOOL_CONTENTS.get(id) != content` |
+| `get_tool_specs(module)` auto-generates from type hints + docstrings | ✅ confirmed | post-sync | location: `utils/tools.py:753` |
+| `convert_function_to_pydantic_model` | ✅ confirmed | post-sync | location: `utils/tools.py:662` |
+| `load_tool_module_by_id` | ✅ confirmed | post-sync | location: `utils/plugin.py:202` (unchanged) |
+| `__user__` / `__id__` / `__metadata__` / `__messages__` injection | ✅ confirmed | post-sync | mechanism unchanged |
+| `tool_ids` in form_data triggers tool resolution | ✅ confirmed | post-sync | `middleware.py:2549` |
+| `payload_tools` (caller-provided tools array) | ✅ confirmed | post-sync | `middleware.py:2463` |
+| `Chats` model API surface | ✅ confirmed | post-sync | 100% method signatures unchanged |
+| `Sidebar.svelte` 1654 lines | ✅ confirmed unchanged | post-sync | upstream 沒動，Plan A/B/C 仍適用 |
+| `Chat.svelte` exports | ⚠️ Refactored (188+/-34 lines) | post-sync | only `chatIdProp` exported still — Plan A 仍可能需 [core-touch] 加 `tool_ids`/`metadata` props |
+| `ResponseMessage.svelte` | ⚠️ Refactored (84+/-39 lines) | post-sync | Day 1 inventory 必看新版本 attachment render 路徑 |
 
 ---
 

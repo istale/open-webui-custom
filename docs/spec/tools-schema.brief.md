@@ -155,7 +155,11 @@ async def register_builtin_data_analysis_tool(app):
 
     # CRITICAL: warm cache so runtime uses live module
     app.state.TOOLS[BUILTIN_TOOL_ID] = instance
+    # Upstream cache invalidation key — must match DB content
+    app.state.TOOL_CONTENTS[BUILTIN_TOOL_ID] = content
 ```
+
+> Upstream `utils/tools.py:194-198` invalidates `TOOLS[id]` if `TOOL_CONTENTS[id] != tool.content`. Must seed both. 詳見 teaching 版同節 "Why TOOL_CONTENTS too?"。
 
 ### Core touch (僅 1 行)
 

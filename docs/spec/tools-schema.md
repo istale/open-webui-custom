@@ -537,12 +537,19 @@ async def register_builtin_data_analysis_tool(app):
 
     # CRITICAL: warm cache so runtime uses live module, NOT DB-exec'd copy
     app.state.TOOLS[BUILTIN_TOOL_ID] = instance
+    # Upstream added TOOL_CONTENTS as cache invalidation key (utils/tools.py
+    # checks `TOOL_CONTENTS.get(tool_id) != tool.content` and re-loads if mismatch).
+    # We MUST also seed TOOL_CONTENTS or our live instance gets replaced on
+    # first tool resolution.
+    app.state.TOOL_CONTENTS[BUILTIN_TOOL_ID] = content
 ```
+
+> **Why TOOL_CONTENTS too?** Upstream 在 109-commit window 內加了 cache invalidation 機制：每次 tool resolution 時比對 `app.state.TOOL_CONTENTS.get(tool_id)` 與 DB 內 `tool.content`，**不一致就強制 reload**。如果我們只設 `TOOLS` 不設 `TOOL_CONTENTS`，第一次有人發訊息觸發 tool 時，live instance 會被 DB-exec 出來的新 instance 覆蓋（功能等價但失去 startup `__init__` 的初始化）。詳見 [`utils/tools.py:194-198`](backend/open_webui/utils/tools.py#L194)（驗證於 upstream `f51d2b026`）。
 
 ### Core touch: `main.py` 一行 startup hook
 
 ```python
-# backend/open_webui/main.py (around the existing app.state.TOOLS = {} init)
+# backend/open_webui/main.py (around the existing app.state.TOOLS = {} init at line 982)
 
 @app.on_event("startup")
 async def _seed_vertical_tools():
