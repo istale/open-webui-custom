@@ -238,13 +238,13 @@ None discovered during Day 1 inventory.
 
 **決策**：**Path FE-C** for MVP without core touch. Native `ToolCallDisplay.svelte` renders images directly from `files` and ignores metadata (`src/lib/components/common/ToolCallDisplay.svelte:256-270`). No Svelte context, slot, registry, or `render_mode` hook was found in `ResponseMessage`, `MarkdownTokens`, or `ToolCallDisplay`. A cleaner FE-B/core hook can be proposed later if CSS/injection proves too brittle.
 
-## Open Questions
+## Open Questions — RESOLVED at CP-1 review (2026-05-10)
 
-> Things we couldn't determine from code reading alone. Flag for user / domain expert.
+- [x] Q1: Plan C for native `<Chat>` (extraToolIds + extraMetadata + saveChatHandler metadata persistence) → ✅ **Approved**, recorded as P-003 in [`UPSTREAM_PATCHES.md`](../UPSTREAM_PATCHES.md). Implementation in CP-6.
+- [x] Q2: Sidebar Plan C (vertical entry + ChatItem routing) → ✅ **Approved**, recorded as P-002 in [`UPSTREAM_PATCHES.md`](../UPSTREAM_PATCHES.md). Implementation in CP-6.
+- [x] Q3: ResponseMessage placeholder path → 🔀 **DEFERRED to CP-3**. Native ToolCallDisplay actual rendering must be observed (after first tool E2E) before locking FE-B/C/D. Adapter (CP-2) does not depend on this decision. Recorded as P-004 (Pending) in UPSTREAM_PATCHES.
 
-- [ ] Q1: Approve the Day 2+ expectation that Native Chat Integration Plan C requires a small `[core-touch]` change to `Chat.svelte` for `extraToolIds` / `extraMetadata` and likely a route override for new vertical chats?
-- [ ] Q2: Approve Sidebar Plan C as a `[core-touch]` patch so vertical chats route to `/data-analysis/{id}` instead of `/c/{id}`?
-- [ ] Q3: Is FE-C acceptable for the MVP placeholder behavior, or should we stop before frontend work and design a small upstream-friendly hook in `ToolCallDisplay.svelte`?
+> See [`docs/review-log.md`](../review-log.md) 2026-05-10 entry for full reviewer notes and rationale.
 
 ---
 
