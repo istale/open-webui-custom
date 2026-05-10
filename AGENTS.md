@@ -59,6 +59,7 @@ concept → diagram → table → step-by-step → code → anti-patterns.
 7. `docs/spec/frontend-design-tokens.md` — visual design system (colors, fonts, radius, shadow, transition, interaction patterns)
 8. `docs/design/mockup-analysis.md` — analysis of user-designed 3panel-mockup.html and component mapping
 9. `docs/spec/event-ledger.md` — analytics event ledger table; behavioral data for ML / product analytics; soft delete; emit points across tool / frontend / streaming
+10. `docs/UPSTREAM_PATCHES.md` — fork maintenance log; every `[core-touch]` modification recorded here; checklist for monthly upstream rebase
 
 ## Hard Rules (non-negotiable)
 
@@ -71,7 +72,13 @@ concept → diagram → table → step-by-step → code → anti-patterns.
 7. **Backend always generates `uuid4().hex` for chart IDs** — never `f'card-{index}'`.
 8. **WIP commits hourly** — untracked files are fragile (lesson from previous attempt). Commit even half-done work to `vertical/data-analysis`.
 9. **Tag milestone points** — `bootstrap-day-0`, `inventory-done`, `first-tool-working`, etc.
-10. **Stop before touching core files** — if you must modify `Chat.svelte` / core router / etc., flag it in commit message with `[core-touch]` and ask the user first.
+10. **Stop before touching core files** — if you must modify `Chat.svelte` / core router / etc.:
+    - Flag commit message with `[core-touch]` prefix
+    - Ask the user first
+    - Add entry to `docs/UPSTREAM_PATCHES.md`（file / line range / why required / Plan tier / removal condition）
+    - Hook width ≤ 5 lines; logic in vertical-specific files
+    - Pre-approved sole exception: 5-line `@app.on_event('startup')` hook in `main.py` for tool registration (still record)
+    - See [`docs/spec/PROJECT_GUIDE.md` Core Touch Discipline](docs/spec/PROJECT_GUIDE.md#core-touch-discipline-fork-維護關鍵)
 
 ## Anti-patterns (strictly avoid)
 
