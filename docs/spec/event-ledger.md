@@ -761,7 +761,124 @@ ORDER BY ctr DESC;
 
 ---
 
-## 9. Anti-patterns
+## 9. Deployment / Graceful Shutdown
+
+### 9.1 為什麼這節重要
+
+`_event_queue` 容量 10k，背景 worker 每 5s / 100 events 才 flush 一次。Worst case 在 worker flush 之間，記憶體內最多累積 100 events 沒落地。**正常 shutdown 流程**會給 worker 機會 drain，但若 process 被 SIGKILL 強制中止 → 這批 events 全丟。
+
+### 9.2 ASGI server 層的 grace period 設定
+
+#### Uvicorn 直接運行
+```bash
+uvicorn open_webui.main:app \
+    --host 0.0.0.0 --port 8080 \
+    --timeout-graceful-shutdown 15
+```
+（Uvicorn 1.0 之後預設 30s，但部署環境經常被外層 override 成 5s）
+
+#### Gunicorn + Uvicorn worker
+```bash
+gunicorn open_webui.main:app \
+    -k uvicorn.workers.UvicornWorker \
+    --graceful-timeout 15 \
+    --timeout 120
+```
+
+#### Kubernetes Pod
+```yaml
+spec:
+  terminationGracePeriodSeconds: 20  # 給 worker 15s drain + 5s buffer
+  containers:
+    - name: open-webui
+      lifecycle:
+        preStop:
+          exec:
+            # 收到 SIGTERM 前先送 in-flight requests 回到 client，
+            # 給 event worker 全速 drain queue
+            command: ["/bin/sh", "-c", "sleep 5"]
+```
+
+### 9.3 Drain budget 計算
+
+最差狀況：queue 滿（10k events），DB bulk_insert 100 events 約 50ms：
+- 100 batches × 50ms = **5 秒**完整 drain
+
+設定 grace period **15 秒**（5s drain + 10s buffer for in-flight HTTP requests）就足夠。
+
+### 9.4 Drain 失敗的最後一道防線（可選 P1）
+
+若 graceful shutdown 仍可能發生（例如 OOM kill 不給 grace），可加 file fallback：
+
+```python
+async def stop_event_worker():
+    """Final drain — write any remaining queue to local file as JSONL."""
+    if _worker_task and not _worker_task.done():
+        _worker_task.cancel()
+
+    remaining = []
+    while not _event_queue.empty():
+        try:
+            remaining.append(_event_queue.get_nowait())
+        except asyncio.QueueEmpty:
+            break
+
+    if not remaining:
+        return
+
+    # 1st attempt: DB
+    try:
+        await DataAnalysisEvents.bulk_insert(remaining)
+        return
+    except Exception as e:
+        log.warning('final DB flush failed: %s; falling back to file', e)
+
+    # 2nd attempt: local JSONL file (recovery script picks up next startup)
+    fallback_path = Path('data/cache/data-analysis/events-pending.jsonl')
+    fallback_path.parent.mkdir(parents=True, exist_ok=True)
+    with fallback_path.open('a') as f:
+        for event in remaining:
+            f.write(json.dumps(event) + '\n')
+
+    log.info('drained %d events to %s', len(remaining), fallback_path)
+```
+
+`start_event_worker` 開頭 replay file（若存在）：
+```python
+def start_event_worker():
+    fallback_path = Path('data/cache/data-analysis/events-pending.jsonl')
+    if fallback_path.exists():
+        log.info('replaying pending events from %s', fallback_path)
+        with fallback_path.open() as f:
+            for line in f:
+                event = json.loads(line)
+                _event_queue.put_nowait(event)
+        fallback_path.unlink()
+    # ... start the worker task ...
+```
+
+**P1 不 P0**：只在你們發現 OOM kill 真的常發生時才需要。MVP 接受 5s 內 worst-case 100 events 丟失。
+
+### 9.5 監控 metric
+
+加一個 health endpoint 暴露 worker 狀態，方便 ops：
+
+```python
+@router.get('/healthz/event-worker')
+async def event_worker_health():
+    return {
+        'queue_size': _event_queue.qsize(),
+        'queue_capacity': _event_queue.maxsize,
+        'worker_alive': _worker_task is not None and not _worker_task.done(),
+        'queue_full_warning': _event_queue.qsize() > 0.8 * _event_queue.maxsize,
+    }
+```
+
+Prometheus / Grafana 抓這個 endpoint，告警「queue > 80% 持續 1 分鐘」 = backlog 在累積，DB 可能掛了。
+
+---
+
+## 10. Anti-patterns
 
 | 反 pattern | 為什麼錯 | 正解 |
 |---|---|---|
@@ -777,7 +894,7 @@ ORDER BY ctr DESC;
 
 ---
 
-## 10. Acceptance / DOD
+## 11. Acceptance / DOD
 
 - [ ] DB migration 跑過，新表 + 6 個 index 都在
 - [ ] `DataAnalysisEvents.bulk_insert` + `.mark_deleted` 有 unit test

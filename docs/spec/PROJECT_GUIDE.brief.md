@@ -105,6 +105,16 @@ Tier 3 hard cap: **15 frontend files + minimal backend**。
 10. **Stop before core touch**：改 `Chat.svelte` / core router 必須 `[core-touch]` prefix + 問 user
    - Pre-approved core touch: 1 行 startup hook in `main.py` for tool registration
 
+## Core Touch Discipline
+
+- **最小化接觸面積**：native 留 hook（slot / extension store），邏輯在 vertical
+- **每處 hook ≤ 5 行**
+- **記錄 `docs/UPSTREAM_PATCHES.md`**：檔案 / 行範圍 / 為什麼必須改 / Plan A/B/C
+- **Pre-approved core touches 清單**：只有 `main.py` 的 startup hook
+- **Rebase upstream 月檢查**：用 `UPSTREAM_PATCHES.md` 為 checklist 走過所有 patches
+
+詳見 [`PROJECT_GUIDE.md` Core Touch Discipline](./PROJECT_GUIDE.md#core-touch-discipline-fork-維護關鍵)。
+
 ---
 
 ## Pre-commit Anti-pattern Checklist

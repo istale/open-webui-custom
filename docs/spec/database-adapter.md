@@ -433,6 +433,76 @@ class InMemoryDatasetRepository:
         )
 ```
 
+### 3.1 Fault Injection（給前端測試 error UI 用）
+
+**為什麼要做**：前端 Day 6 寫 Loading / Error / Empty / Timeout / Permission states 時，需要可控觸發各種錯誤。如果 InMemory 永遠回成功，前端只能改 mock fetch 才能測 error UI（耦合度高）。讓 `InMemoryDatasetRepository` 偵測 SQL 內的 magic strings 自動觸發指定錯誤，前端**改一行 query 字串就能切換 state**，不用 backend 配合。
+
+**支援的 magic strings**（出現在 SQL 任何位置即觸發）：
+
+| Magic string | 觸發行為 |
+|---|---|
+| `_FAULT_TIMEOUT` | `await asyncio.sleep(timeout_s + 1)` 然後 raise `QueryTimeoutError("Simulated timeout (fault injection)")` |
+| `_FAULT_NOT_FOUND` | raise `DatasetNotFoundError("Simulated not found (fault injection)")` |
+| `_FAULT_DENIED` | raise `PermissionDeniedError("Simulated permission denied (fault injection)")` |
+| `_FAULT_INVALID` | raise `QueryValidationError("Simulated invalid query (fault injection)")` |
+| `_FAULT_TOO_LARGE` | raise `QuerySizeError("Simulated size limit exceeded (fault injection)")` |
+| `_FAULT_UNAVAILABLE` | raise `RepositoryUnavailableError("Simulated external system down (fault injection)")` |
+| `_FAULT_SLOW_3S` | `await asyncio.sleep(3)` 然後正常回傳 — 測 loading skeleton |
+| `_FAULT_TRUNCATED` | 正常回傳但設 `truncated=True` 與 `row_count = max_rows` — 測 truncation 警示 UI |
+
+**實作**（補在 `execute_query` 開頭）：
+
+```python
+import asyncio
+
+# 在 InMemoryDatasetRepository class 內
+
+_FAULT_HANDLERS: dict[str, Callable] = {
+    '_FAULT_TIMEOUT':     lambda: (_ for _ in ()).throw(QueryTimeoutError("Simulated timeout (fault injection)")),
+    '_FAULT_NOT_FOUND':   lambda: (_ for _ in ()).throw(DatasetNotFoundError("Simulated not found (fault injection)")),
+    '_FAULT_DENIED':      lambda: (_ for _ in ()).throw(PermissionDeniedError("Simulated permission denied (fault injection)")),
+    '_FAULT_INVALID':     lambda: (_ for _ in ()).throw(QueryValidationError("Simulated invalid query (fault injection)")),
+    '_FAULT_TOO_LARGE':   lambda: (_ for _ in ()).throw(QuerySizeError("Simulated size limit (fault injection)")),
+    '_FAULT_UNAVAILABLE': lambda: (_ for _ in ()).throw(RepositoryUnavailableError("Simulated external down (fault injection)")),
+}
+
+async def execute_query(self, dataset_id, sql, *, user_id,
+                         max_rows=10_000_000, timeout_s=30):
+    # Fault injection — only active in InMemory adapter
+    for marker, handler in self._FAULT_HANDLERS.items():
+        if marker in sql:
+            handler()  # raises
+
+    if '_FAULT_SLOW_3S' in sql:
+        await asyncio.sleep(3)
+    # ... normal execution ...
+
+    if '_FAULT_TRUNCATED' in sql:
+        truncated = True
+        # cap result regardless
+
+    return QueryResult(...)
+```
+
+> **重要**：fault injection **僅** `InMemoryDatasetRepository` 啟用。`HttpDatasetRepository` 不解析 SQL（透傳給外部），自然不受影響。Production 永遠用 HTTP adapter，不會有此後門。
+
+**前端使用範例**：
+
+```ts
+// 開發時想測 timeout error UI
+const testQuery = "SELECT * FROM dataset_0050 WHERE id < 100 -- _FAULT_TIMEOUT";
+
+// 測 permission denied banner
+const testQuery = "SELECT * FROM dataset_0050 -- _FAULT_DENIED";
+
+// 測 loading skeleton（3 秒延遲）
+const testQuery = "SELECT * FROM dataset_0050 -- _FAULT_SLOW_3S";
+```
+
+**驗收**：
+- 8 個 magic strings 各自有 unit test，驗證 raise 對應 exception
+- HTTP adapter 對同樣 SQL 透傳到 fake server，**不**自行解析 magic strings（驗證 fault injection 不會洩到 production path）
+
 ---
 
 ## 4. Dependency Injection / Wiring

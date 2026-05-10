@@ -123,6 +123,24 @@ class RepositoryUnavailableError(RepositoryError): ...
 - Query：`pandasql` 或 `duckdb`
 - 全部 method same Port API
 
+#### Fault Injection（前端 error UI 測試用）
+
+InMemory 偵測 SQL 內 magic string 自動觸發錯誤，前端不用改 mock：
+
+| Magic string | 行為 |
+|---|---|
+| `_FAULT_TIMEOUT` | raise `QueryTimeoutError` |
+| `_FAULT_NOT_FOUND` | raise `DatasetNotFoundError` |
+| `_FAULT_DENIED` | raise `PermissionDeniedError` |
+| `_FAULT_INVALID` | raise `QueryValidationError` |
+| `_FAULT_TOO_LARGE` | raise `QuerySizeError` |
+| `_FAULT_UNAVAILABLE` | raise `RepositoryUnavailableError` |
+| `_FAULT_SLOW_3S` | `asyncio.sleep(3)` 後正常回 — 測 skeleton |
+| `_FAULT_TRUNCATED` | 正常回但設 `truncated=True` |
+
+**僅** InMemory adapter 啟用，HTTP adapter 透傳不解析。Production 不受影響。
+詳見 [`database-adapter.md` §3.1](./database-adapter.md#31-fault-injection給前端測試-error-ui-用)。
+
 ### RecordReplayDatasetRepository (contract test 用)
 
 包另一個 repo，第一次 record JSON 到 disk，後續 replay。CI 跑離線測試。

@@ -289,12 +289,47 @@ in the workspace. Use the provided tools to answer questions:
    - line / bar / scatter / histogram: standard cases
 3. Always provide an `explanation` object so the analyst can verify your method.
 4. For narrative answers without a chart, call `summarize_data` or reply directly.
+5. **Recovery from query_id expiration**: query results are cached server-side
+   for 1 hour. If `render_chart` returns an error containing "query_id expired"
+   or "not found", you MUST automatically re-call `query_dataset` with the
+   same parameters to obtain a new query_id, then retry `render_chart`.
+   Do this silently without bothering the user unless the underlying
+   query also fails. The user expects continuity even if their session
+   has been idle.
 
 Constraints:
 - Never include raw data points in your text response — they're already in the chart attachment.
 - Use the user's selected dataset_id from the workspace context.
 - If a query times out, suggest a more selective filter.
+- If a query_id is expired, recover automatically per item 5 above. Do not
+  ask the user to "click again" or repeat their question.
 ```
+
+### 為什麼有 query_id 過期 recovery 規則
+
+QueryCache TTL 設 1 hour（[`data-analysis-vertical-spec.md` §4](./data-analysis-vertical-spec.md#4-query-cache)）。製造業 forensic 分析常見場景：
+
+> User 早上 9:00 跑了一個 query，看了第一張 control chart。
+> 開會去到 11:00，回來說「再幫我看 sensor S13 的同時段資料」。
+> 此時 LLM 想呼叫 `render_chart(query_id=...)` 但 cache 已 evict。
+
+如果 LLM 不知道怎麼 recovery，user 會看到「Internal error: query_id expired」這種 confusing 訊息，必須重打整段問題。**System prompt 第 5 點明確教 LLM 自動 retry**，UX 上幾乎察覺不到 cache miss（多 query 一次的延遲是 5–10s）。
+
+### Backend 端配合
+
+`render_chart` 偵測 cache miss 時 raise 的 error message **必須包含關鍵字**「query_id expired」或「not found」，讓 LLM 看到字面上能判斷該怎麼 recovery：
+
+```python
+def render_chart(self, query_id: str, ...):
+    df = self.query_cache.get(query_id)
+    if df is None:
+        raise ToolError(
+            f"query_id {query_id} expired or not found. "
+            f"Please re-run query_dataset with the same parameters."
+        )
+```
+
+LLM 會看到這個 error 字串作為 tool result，然後依 system prompt 第 5 點自動 retry。
 
 ---
 

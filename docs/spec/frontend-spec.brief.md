@@ -167,6 +167,10 @@ export let chartType: string;
 ```
 Plan A/B/C decision per inventory（見 §9 in teaching）。
 
+#### Caveats
+- **State 殘留**：若 inventory 發現原生 `<Chat>` 不在 `chatId` 改變時 reset internal state，用 `{#key currentChatId}` block wrap。否則切 chat 時舊訊息會閃現。
+- **Image scroll 高度**：ChartCardCanvas `<img>` 用 `aspect-ratio: 16/9` CSS 預留空間，避免 `afterUpdate` 算 `scrollHeight` 時圖片未載入造成跳錯位。
+
 ---
 
 ## 3. Stores

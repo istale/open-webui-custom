@@ -137,6 +137,25 @@ async def _shutdown():
 
 Batch insert：每 5s 或滿 100 events 觸發。
 
+### Deployment grace period
+
+- Uvicorn: `--timeout-graceful-shutdown 15`
+- Gunicorn: `--graceful-timeout 15`
+- K8s pod: `terminationGracePeriodSeconds: 20`
+
+Worst-case drain budget：100 batches × 50ms = ~5s。配 15s grace 充足。
+
+P1 fallback（若 OOM kill 常發生）：drain 失敗的 events 寫到 `data/cache/data-analysis/events-pending.jsonl`，下次 startup replay。詳見 [event-ledger.md §9.4](./event-ledger.md#94-drain-失敗的最後一道防線可選-p1)。
+
+### Health monitoring
+
+```python
+@router.get('/healthz/event-worker')
+async def event_worker_health(): ...
+```
+
+回傳 `queue_size / queue_capacity / worker_alive / queue_full_warning`。Prometheus alert：queue > 80% × 1min。
+
 ---
 
 ## Soft Delete

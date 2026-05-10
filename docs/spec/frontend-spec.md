@@ -580,6 +580,69 @@ const handleChatClick = (chat) => {
   ```
 - **Props 細節依 [`inventory-results.md`](./inventory-results.md) Day 1 確認結果填入**。如果 native `<Chat>` 不接受 `tool_ids` 或 `metadata` 作為 props，回到 §9 「Native Chat Integration Plan B」走 form data 注入路徑。
 
+#### Caveat: Chat 切換時的 state 殘留
+
+SvelteKit 的 nested layout 在 `goto('/workspace/data-analysis/' + newId)` 切換 chat 時，**右欄 `<Chat>` 不會 unmount/remount**（只有 `chatId` prop 改變）。如果原生 `<Chat>` 沒有正確 handle `chatId` prop 變動的內部 reset 邏輯，可能會看到：
+
+- 舊對話訊息閃現一下才被新的取代
+- Streaming 中切 chat → streaming 還在跑，attach 到錯的 chat document
+- 輸入框內草稿沒清空
+
+**Day 1 inventory 必須驗證**：原生 `<Chat>` 是否在 `$: chatId` 變動時做以下事情：
+- Reset internal `history` state
+- Cancel pending streaming requests
+- Clear input draft
+
+**若 inventory 發現原生不處理**，用 Svelte 的 keyed block 強制重建：
+
+```svelte
+{#key currentChatId}
+    <Chat
+        bind:chatId={currentChatId}
+        tool_ids={['builtin:data-analysis']}
+        metadata={...}
+    />
+{/key}
+```
+
+`{#key X}` block 在 X 變動時銷毀 + 重建內部所有元件，乾淨。**代價**：切換時會多一次 mount cost（fetch chat document 等），但對 vertical workspace 的場景（通常切 chat 頻率不高）可接受。
+
+如果原生 `<Chat>` 已正確 handle，就**不用**加 `{#key}`（避免重建成本）。Inventory Day 1 結果決定。
+
+#### Caveat: Image-load scroll 高度錯算
+
+CanvasFeed `afterUpdate` 算 `scrollHeight` 觸發 auto-scroll 時，若新 ChartCardCanvas 內的 `<img>` **尚未載入完成**，圖片實際高度為 0，整個 card 高度被低估，`scrollIntoView` 會跳到錯位置。
+
+**解法**：在 `<ChartCardCanvas>` 內 `<img>` wrapper 用 `aspect-ratio` CSS 預先保留空間：
+
+```svelte
+<div class="image-wrap" style="aspect-ratio: 16 / 9; max-width: 100%;">
+    <img
+        src={card.url}
+        alt={card.title}
+        loading="lazy"
+        on:load={handleImageLoad}
+        on:error={handleImageError}
+    />
+</div>
+```
+
+```css
+.image-wrap {
+    /* aspect-ratio 讓瀏覽器在圖片載入前就預留正確高度 */
+    aspect-ratio: 16 / 9;  /* 對齊 backend matplotlib figsize=(16, 9) */
+    background: var(--surface2);  /* 載入中顯示淺色 */
+    overflow: hidden;
+}
+.image-wrap img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+```
+
+如此 `<img>` 從 mount 那刻起就佔住 16:9 的空間，scroll 計算正確。圖片載入完成後 `on:load` fires，可選擇性再次 trigger scroll-to-bottom（若 user 仍在底部）。
+
 ---
 
 ## 3. Stores（State Management）
