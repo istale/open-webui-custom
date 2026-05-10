@@ -233,7 +233,7 @@ git log --oneline | grep '\[core-touch\]'
 
 | 檔案 | 變動 | 用途 |
 |---|---|---|
-| `backend/open_webui/main.py` | +5 lines `@app.on_event('startup')` | 註冊 vertical built-in tool |
+| `backend/open_webui/main.py` | +2 lines inside existing `lifespan(app)` startup path | 註冊 vertical built-in tool |
 
 其他**任何** core touch 必須：
 1. Commit prefix `[core-touch]`

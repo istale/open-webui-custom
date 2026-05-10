@@ -161,17 +161,16 @@ async def register_builtin_data_analysis_tool(app):
 
 > Upstream `utils/tools.py:194-198` invalidates `TOOLS[id]` if `TOOL_CONTENTS[id] != tool.content`. Must seed both. 詳見 teaching 版同節 "Why TOOL_CONTENTS too?"。
 
-### Core touch (僅 1 行)
+### Core touch
 
 ```python
-# backend/open_webui/main.py
-@app.on_event("startup")
-async def _seed_vertical_tools():
-    """[core-touch] Vertical workspace tool registration."""
-    from open_webui.tools.data_analysis import register_builtin_data_analysis_tool
-    await register_builtin_data_analysis_tool(app)
+# backend/open_webui/main.py, inside lifespan(app), before startup_complete = True
+from open_webui.tools.data_analysis import register_builtin_data_analysis_tool
+await register_builtin_data_analysis_tool(app)
 ```
 
+Current Open WebUI uses `FastAPI(lifespan=lifespan)`, so P-001 must be wired
+inside the existing lifespan startup path rather than `@app.on_event("startup")`.
 Commit prefix `[core-touch]` 標示。
 
 ---

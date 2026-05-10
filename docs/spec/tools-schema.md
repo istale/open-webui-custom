@@ -566,18 +566,23 @@ async def register_builtin_data_analysis_tool(app):
 
 > **Why TOOL_CONTENTS too?** Upstream 在 109-commit window 內加了 cache invalidation 機制：每次 tool resolution 時比對 `app.state.TOOL_CONTENTS.get(tool_id)` 與 DB 內 `tool.content`，**不一致就強制 reload**。如果我們只設 `TOOLS` 不設 `TOOL_CONTENTS`，第一次有人發訊息觸發 tool 時，live instance 會被 DB-exec 出來的新 instance 覆蓋（功能等價但失去 startup `__init__` 的初始化）。詳見 [`utils/tools.py:194-198`](backend/open_webui/utils/tools.py#L194)（驗證於 upstream `f51d2b026`）。
 
-### Core touch: `main.py` 一行 startup hook
+### Core touch: `main.py` lifespan startup hook
 
 ```python
-# backend/open_webui/main.py (around the existing app.state.TOOLS = {} init at line 982)
+# backend/open_webui/main.py (inside lifespan(app), before startup_complete = True)
 
-@app.on_event("startup")
-async def _seed_vertical_tools():
-    """[core-touch] Vertical workspace tool registration."""
-    from open_webui.tools.data_analysis import register_builtin_data_analysis_tool
-    await register_builtin_data_analysis_tool(app)
+from open_webui.tools.data_analysis import register_builtin_data_analysis_tool
+await register_builtin_data_analysis_tool(app)
 ```
 
+> **Codebase correction (2026-05-11)**: current Open WebUI uses
+> `FastAPI(lifespan=lifespan)` in `backend/open_webui/main.py`, not separate
+> `@app.on_event("startup")` handlers. When FastAPI lifespan is supplied,
+> startup/shutdown event handlers are not the reliable integration point.
+> Therefore P-001 is still the same approved core touch, but the implementation
+> is a 2-line call inside the existing `lifespan(app)` startup sequence before
+> `app.state.startup_complete = True`.
+>
 > 此為唯一允許的 core touch。Commit 訊息加 `[core-touch]` 前綴。
 
 ### Frontend：`tool_ids` 用法

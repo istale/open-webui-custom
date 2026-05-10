@@ -64,8 +64,9 @@ npm test
 - **First introduced**: TBD（Day 5–6 工程實作時加上）
 - **Why required**:
   Open WebUI 沒有 tool plugin / dynamic registration API。Tools 必須存在 DB 表中。
-  最乾淨方式：startup hook 把我們 vertical 自帶的 `class Tools` 寫進 DB
-  並 warm `app.state.TOOLS` cache。詳見 [`tools-schema.md` 「整合 Open WebUI 的 Tool Registration」](./spec/tools-schema.md#整合-open-webui-的-tool-registration已實際確認)。
+  最乾淨方式：在既有 `lifespan(app)` startup path 把我們 vertical 自帶的
+  `class Tools` 寫進 DB 並 warm `app.state.TOOLS` cache。詳見
+  [`tools-schema.md` 「整合 Open WebUI 的 Tool Registration」](./spec/tools-schema.md#整合-open-webui-的-tool-registration已實際確認)。
 - **Plan tier**: Plan B（無 native hook，但寬度極小）
 - **Owner**: vertical/data-analysis backend
 - **Related spec**: [`tools-schema.md`](./spec/tools-schema.md)、[`tools-schema.brief.md`](./spec/tools-schema.brief.md)
@@ -73,13 +74,14 @@ npm test
   Upstream 加了 `register_builtin_tool(...)` API → 改用 native API + revert 此 hook
 - **Code snippet** (參考用，實際以 commit diff 為準):
   ```python
-  @app.on_event("startup")
-  async def _seed_vertical_tools():
-      """[core-touch] Vertical workspace tool registration."""
-      from open_webui.tools.data_analysis import register_builtin_data_analysis_tool
-      await register_builtin_data_analysis_tool(app)
+  from open_webui.tools.data_analysis import register_builtin_data_analysis_tool
+  await register_builtin_data_analysis_tool(app)
   ```
 - **Upstream interaction notes** (post-sync 2026-05-09 to `f51d2b026`):
+  - 2026-05-11 CP-3 correction: current `main.py` is already wired through
+    `FastAPI(lifespan=lifespan)`, so P-001 must live inside that existing
+    lifespan startup block before `app.state.startup_complete = True`; a
+    separate `@app.on_event("startup")` handler is not the correct hook.
   - Upstream 加了 `app.state.TOOL_CONTENTS = {}` (`main.py:983`) +
     cache invalidation logic (`utils/tools.py:194-198`)
   - 我們的 `register_builtin_data_analysis_tool` 必須**同時**設
