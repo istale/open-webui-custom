@@ -13,7 +13,7 @@
 | 維度 | 自定 SSE event（上次做法）| Tool Calling（這次做法）|
 |---|---|---|
 | 整合進原生 lifecycle | ❌ 必須補 Phase 3 Hybrid | ✅ 自動，原生支援 |
-| 訊息持久化 | ❌ 自寫 metadata schema | ✅ `message.toolCalls[]` 內建 |
+| 訊息持久化 | ❌ 自寫 metadata schema | ✅ `message.output[]` + serialized `<details type="tool_calls">` 內建 |
 | 取消 / 重試 / 中斷 | ❌ 自刻 abort handler + finally | ✅ 原生 streaming infra 處理 |
 | Branching / regenerate | ❌ 自定義 metadata 不會跟 message tree | ✅ Tool result 跟 message 綁，branch 自動帶 |
 | RBAC / quota | ❌ 自刻權限檢查 | ✅ 走原生 user model + tool permission |
@@ -38,7 +38,7 @@
 
 每個 tool 一個 backend function，原生 chat completion pipeline 會自動：
 - 在 LLM response 中偵測 tool call → 派發給 backend
-- 把結果包回 message.toolCalls / attachments → 前端原生渲染
+- 把結果包回 assistant message 的 `output[]` / `content` → 前端原生渲染 tool-call details
 - Streaming 中段失敗自動 retry / 顯示 error
 - 結果跟 message 永久綁定，branching 帶著走
 
@@ -202,19 +202,39 @@ def render_chart(query_id: str, chart_type: str, x: str, y: str,
 
 ### 前端怎麼渲染
 
-原生 `ResponseMessage.svelte` 看到 `message.toolCalls[i].result.attachment.type === "image"` 就會自動渲染 image。
+> **Day 1 correction（2026-05-10）**：current Open WebUI does **not** expose
+> a persisted frontend `message.toolCalls[]` field. Native tool calls are stored
+> on assistant messages as:
+>
+> - `message.output[]` items: `function_call` + `function_call_output`
+> - `message.content`: HTML-like serialized `<details type="tool_calls" ...>`
+> - `function_call_output.files`: optional display files consumed by native
+>   `ToolCallDisplay.svelte`
+>
+> Canvas derivation must therefore parse `message.output[]` first, with
+> `<details type="tool_calls">` as a display fallback. Do not create a parallel
+> `resultCards[]` array.
+
+原生 `ResponseMessage.svelte` 不讀 `message.toolCalls[i].result.attachment`。它把
+`message.content` 交給 `ContentRenderer` / `MarkdownTokens`，再由
+`ToolCallDisplay.svelte` 渲染 `<details type="tool_calls">`，其中圖片來自
+`function_call_output.files` 序列化後的 `files="..."` attribute。
 
 對於 vertical canvas，前端這樣 derived：
 
 ```ts
 $: canvasAttachments = messages.flatMap((m) =>
-  (m.toolCalls ?? [])
-    .filter((tc) => tc.function?.name === 'render_chart')
-    .map((tc) => ({
-      ...tc.result.attachment,
-      messageId: m.id,
-      toolCallId: tc.id
-    }))
+  (m.output ?? [])
+    .filter((item) => item.type === 'function_call' && item.name === 'render_chart')
+    .map((call) => {
+      const result = (m.output ?? []).find(
+        (item) => item.type === 'function_call_output' && item.call_id === call.call_id
+      );
+      return result
+        ? dataAnalysisChartFromToolOutput({ call, result, messageId: m.id })
+        : null;
+    })
+    .filter(Boolean)
 );
 ```
 
@@ -341,7 +361,7 @@ LLM 會看到這個 error 字串作為 tool result，然後依 system prompt 第
 |---|---|
 | Layer 1 — LLM Output Subset | Tool function `parameters` schema（OpenAI function calling spec）|
 | Layer 2 — Backend Enrichment | Tool function 的 Python 實作（query_id / chart_id / audit / statistics 都在這層補）|
-| Layer 3 — Persistence Format | `message.toolCalls[]` 欄位（Open WebUI 原生 schema，由原生 lifecycle 持久化）|
+| Layer 3 — Persistence Format | assistant `message.output[]` + serialized `<details type="tool_calls">`（Open WebUI 原生 schema，由原生 lifecycle 持久化）|
 
 **LLM 嚴禁輸出**的欄位（id / chart_id / rendered_at / statistics / raw_row_count）在 function 簽名上**根本不存在**，所以 LLM 想塞也塞不進來 → 原生 function calling 比自刻 SSE 多一層保護。
 
@@ -580,7 +600,7 @@ Open WebUI middleware 收到後會自動：
 2. 從 DB 取 specs，給 model 看
 3. Model 決定呼叫哪個 method
 4. Middleware 執行，自動注入 `__user__` / `__id__`
-5. 回傳結果包進 `<details type="tool_calls">` 渲染塊
+5. 回傳結果包進 `message.output[]` 並同步序列化成 `<details type="tool_calls">` 渲染塊
 6. 持久化到 `chat.chat.history.messages[id]`
 
 **整套流程零自定義 SSE / 零自定 reducer**。
@@ -607,10 +627,10 @@ Method 簽名上以 `__xxx__` 開頭的參數會被 [`utils/tools.py:194`](backe
 
 ## Acceptance（如何驗證 tool calling 路徑通了）
 
-- [ ] `list_datasets` 從 LLM prompt 觸發，原生 chat 自動 dispatch 到 backend，結果出現在 `message.toolCalls[0].result`
+- [ ] `list_datasets` 從 LLM prompt 觸發，原生 chat 自動 dispatch 到 backend，結果出現在 assistant `message.output[]` 的 `function_call_output`
 - [ ] `query_dataset` → `render_chart` 兩個 tool call 串接，`render_chart` 用 `query_id` 取到正確 DataFrame
 - [ ] Chart attachment 自動顯示在 chat 內（`ResponseMessage.svelte` 原生渲染）
-- [ ] 中間欄 canvas feed 從 `message.toolCalls[].result.attachment` derived
+- [ ] 中間欄 canvas feed 從 assistant `message.output[]` 的 `render_chart` call/output pair derived
 - [ ] Reload chat → tool calls 從 chat document 還原 → 前端重新渲染（無 image url 失效時走 regen endpoint）
 - [ ] 取消 streaming 中的 chat → tool call 也被 cancel（原生 abort propagation）
 - [ ] 重生 (regenerate) assistant 訊息 → 舊的 tool call 在 sibling branch，新訊息有自己的 tool call
@@ -625,4 +645,4 @@ Method 簽名上以 `__xxx__` 開頭的參數會被 [`utils/tools.py:194`](backe
 | LLM 輸出 `chartData[]` 整段資料 | 不該在 LLM context 裡，用 `query_id` 引用 server-side cache |
 | 自寫 `validate_llm_card` + `FORBIDDEN_LLM_KEYS` | 改用 OpenAI function calling 的 strict schema validation（model 原生支援）|
 | 自定 `card_id = f'card-{index}'` | Tool result attachment id 一律 `uuid4().hex` |
-| `message.metadata.result_cards[]` 平行於原生 message | 改用 `message.toolCalls[]`（原生欄位）|
+| `message.metadata.result_cards[]` 平行於原生 message | 改用 assistant `message.output[]` / `<details type="tool_calls">`（原生欄位）|

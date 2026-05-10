@@ -42,7 +42,7 @@
   - `selected_dataset_id`
   - `selected_group_filter`
   - `search_term`
-- Cards are derived from `message.toolCalls[]` results — no separate storage
+- Cards are derived from assistant `message.output[]` tool call/output pairs — no separate storage
 
 ### Why time-ordered feed (not pinning / tabs)
 > 製造業分析 = 一步步收斂的推理過程，每一步都是 audit trail，**不可隱藏**
@@ -148,7 +148,7 @@ src/routes/(app)/workspace/data-analysis/
 src/lib/components/data-analysis/
 ├── DataAnalysisLayout.svelte     # 三 panel grid（responsive）
 ├── DatasetPanel.svelte           # left
-├── CanvasFeed.svelte             # middle (derived from message.toolCalls[])
+├── CanvasFeed.svelte             # middle (derived from assistant message.output[])
 ├── ChartCardCanvas.svelte        # single chart card
 ├── ChatPlaceholder.svelte        # in-chat 「📊 已加到分析畫布」
 └── scroll-utils.ts               # auto-scroll helper
@@ -159,7 +159,7 @@ src/lib/apis/data-analysis/       # endpoint wrappers
 
 - Right-panel `<Chat>` is `import Chat from '$lib/components/chat/Chat.svelte'` — **native, unmodified**
 - Pass `tool_ids={['builtin:data-analysis']}` and `metadata={{ workspace_type: 'data-analysis', ... }}`
-- `CanvasFeed` derives from `$: messages` of the active chat → flatMap toolCalls → filter render_chart results
+- `CanvasFeed` derives from `$: messages` of the active chat → match `message.output[]` `render_chart` function calls with their `function_call_output` results
 - 前端 hard cap：~1400 行，10 個檔案（詳見 [frontend-spec.md §11](./frontend-spec.md#11-frontend-custom-檔案清單tier-3)）
 
 ## 7. Acceptance Criteria

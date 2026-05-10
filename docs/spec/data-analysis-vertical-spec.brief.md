@@ -29,7 +29,7 @@
 
 - Live state: `chat.chat.metadata.workspace_type = "data-analysis"` 是 discriminator
 - Vertical state: `chat.chat.metadata.data_analysis.{ selected_dataset_id, selected_group_filter, search_term }`
-- Cards/charts: derived from `message.toolCalls[]`，不另存
+- Cards/charts: derived from assistant `message.output[]` tool call/output pairs，不另存
 - 行為事件: `data_analysis_events` 表（[`event-ledger.brief.md`](./event-ledger.brief.md)）
 
 ---

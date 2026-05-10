@@ -84,7 +84,7 @@ class Tools:
 |---|---|
 | Layer 1: LLM output subset | OpenAI function `parameters` schema (auto-derived from method signature) |
 | Layer 2: Backend enrichment | Method 內 Python (產 query_id / chart_id / audit / statistics) |
-| Layer 3: Persistence | `message.toolCalls[]` (Open WebUI native) |
+| Layer 3: Persistence | assistant `message.output[]` + serialized `<details type="tool_calls">` (Open WebUI native) |
 
 **LLM 嚴禁輸出**：`id` / `chart_id` / `rendered` / `audit` / 任何 timestamp / 任何 cache key — 簽名上根本不存在這些參數。
 
@@ -92,7 +92,7 @@ class Tools:
 
 ## Image Attachment Schema
 
-`render_chart` return shape（Open WebUI native attachment 格式）：
+`render_chart` logical chart result shape（backend-generated fields; serialized through Open WebUI native `function_call_output` / `<details type="tool_calls">` path）：
 
 ```python
 {
@@ -194,8 +194,10 @@ Native middleware 自動：
 1. 從 `app.state.TOOLS['builtin:data-analysis']` 取 live module
 2. 從 DB 取 specs 給 model
 3. Model 決定呼叫 → middleware execute（自動注入 `__user__` 等）
-4. Result 包進 `<details type="tool_calls">` rendering
+4. Result 包進 assistant `message.output[]`，並序列化成 `<details type="tool_calls">` rendering
 5. 持久化到 `chat.chat.history.messages[id]`
+
+**Day 1 correction (2026-05-10)**: current Open WebUI frontend does not persist/read `message.toolCalls[]`. Canvas code must derive chart cards from assistant `message.output[]` `function_call` + `function_call_output` pairs, with serialized `<details type="tool_calls">` as display fallback.
 
 ---
 
@@ -289,7 +291,7 @@ def query_dataset(self, dataset_id, query, max_rows=100, *, __user__=None):
 - ❌ LLM 輸出 `chartData[]` → server-side cache by `query_id`
 - ❌ 手寫 OpenAI JSON schema → type hints + docstring auto-generate
 - ❌ `f'card-{index}'` fallback id → backend `uuid4().hex`
-- ❌ `message.metadata.result_cards[]` 平行於 native → 用 `message.toolCalls[]`
+- ❌ `message.metadata.result_cards[]` 平行於 native → 用 assistant `message.output[]` / `<details type="tool_calls">`
 - ❌ Tool function 同步 await DB log → `asyncio.create_task`
 - ❌ 巢狀 dict 參數（`explanation: {...}`）→ flat string params
 

@@ -111,7 +111,7 @@
 | 模組 | 路徑 | 用途 |
 |---|---|---|
 | Tool call display in `ResponseMessage` | 內建 | 顯示 tool 執行中、執行結果、attachments |
-| `message.toolCalls[]` | 訊息結構內 | 結構化儲存 tool 呼叫與結果 |
+| assistant `message.output[]` + `<details type="tool_calls">` | 訊息結構內 | 結構化儲存 tool 呼叫與結果；Day 1 confirmed current frontend does not expose `message.toolCalls[]` |
 | `message.statusHistory[]` | 訊息結構內 | 中間進度 |
 
 **Vertical 怎麼用**：每張 chart card / table 表達為「**一次 tool call 的結果**」。詳見 [tools-schema.md](./tools-schema.md)。
@@ -166,4 +166,4 @@
 | 自定 `metadata.thinking_content` | 應改 `<think>` in content + 原生 reasoning rendering |
 | 自定 `analysis_workspaces` 表 | 應改 `chat.chat.metadata.workspace_type` |
 | Image endpoint 三層 token fallback | 應走原生 cookie session / file attachment 機制 |
-| Page-level `resultCards[]` 陣列 | 應一律從 `message.metadata` derived |
+| Page-level `resultCards[]` 陣列 | 應一律從原生 assistant `message.output[]` / `<details type="tool_calls">` derived |

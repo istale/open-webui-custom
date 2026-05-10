@@ -16,7 +16,7 @@ Open WebUI 原生的 chat table（`chat.chat` jsonb 欄位）存的是 **live st
 
 ```
 chat.chat = {
-    history: { messages: { [id]: { role, content, toolCalls, ... } } },
+    history: { messages: { [id]: { role, content, output, ... } } },
     metadata: { workspace_type, data_analysis: { selected_dataset_id, ... } }
 }
 ```

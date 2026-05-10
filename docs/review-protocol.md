@@ -60,7 +60,7 @@
 ### CP-3：First Tool E2E
 - **Tag**：`first-tool-e2e`
 - **對應 Day**：4
-- **Trigger**：`list_datasets` 從 LLM prompt 觸發，原生 chat dispatch 到 backend，結果出現在 `message.toolCalls[]`
+- **Trigger**：`list_datasets` 從 LLM prompt 觸發，原生 chat dispatch 到 backend，結果出現在 assistant `message.output[]` 的 `function_call_output`
 - **Required deliverables**：
   - `backend/open_webui/tools/data_analysis/tool_module.py`（至少 `list_datasets` method）
   - `backend/open_webui/tools/data_analysis/__init__.py`（含 `register_builtin_data_analysis_tool`）

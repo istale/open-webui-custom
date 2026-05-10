@@ -367,9 +367,9 @@ const handleChatClick = (chat) => {
 
 #### Step 6 — CanvasFeed derived view（0.5 day）
 1. 寫 `<CanvasFeed>`，subscribe `history.messages`
-2. derived `canvasCards = ...flatMap(toolCalls).filter(render_chart)...`
+2. derived `canvasCards = ...flatMap(message.output).match(render_chart call/output pairs)...`
 3. 用「製作中 / 完成」假 chart（hard-coded `<img>` 或 placeholder）測渲染
-4. **Demo**：手動 mock 一個 toolCall 看 canvas 出 card
+4. **Demo**：手動 mock 一組 `function_call` + `function_call_output` 看 canvas 出 card
 
 #### Step 7 — Auto-scroll 行為（0.5 day）
 1. Chat 區：依 `MessageThread` 規格實作（其實 native 已經有，看 inventory Day 1 確認是否需自己做）
@@ -403,7 +403,7 @@ const handleChatClick = (chat) => {
 | 用全域 store 記「現在 vertical mode」| Source of truth 錯 — URL 才是 | `$page.url.pathname` 判斷 |
 | 在 layout `+layout.svelte` 內 `goto('/workspace/...')` 做重導 | 會無限迴圈 | 重導邏輯放 `+layout.ts` `load()` 或 `+page.ts` |
 | Page-level 維護 `cards: Card[]` array | 雙來源 sync bug | 永遠 derived from message tree |
-| 自己寫 SSE consumer 接 vertical 自定 events | 重做了 native 已有的事 | 走 native tool calling，事件包進 `toolCalls[]` |
+| 自己寫 SSE consumer 接 vertical 自定 events | 重做了 native 已有的事 | 走 native tool calling，事件包進 assistant `message.output[]` / `<details type="tool_calls">` |
 | 在 vertical layout 裡 import `chats` store 並 mutate | 違反原生 store ownership | 用原生 API（`updateChatById`），讓原生 store 自己 reactive |
 | Sidebar 點 vertical chat 卻跳 `/c/{id}` | 進到 generic chat 介面，使用者困惑 | sidebar handler 偵測 `metadata.workspace_type` 切路徑 |
 | Hard-code 路徑字串 `'/workspace/data-analysis/'` 散布各處 | 改路徑時要改 N 處 | 集中在 `src/lib/utils/data-analysis-paths.ts` |
@@ -487,20 +487,27 @@ const handleChatClick = (chat) => {
   export let isStreaming: boolean;          // 影響 loading state
   ```
 - **Derived**：
+  > **Day 1 correction（2026-05-10）**：Open WebUI current frontend does
+  > not expose `message.toolCalls[]`. Native tool calls are persisted as
+  > assistant `message.output[]` items (`function_call` +
+  > `function_call_output`) and rendered from serialized
+  > `<details type="tool_calls">` in `message.content`.
+  > CanvasFeed must derive from `message.output[]`; parsing the `<details>`
+  > attributes is only a fallback for older messages.
+
   ```ts
   $: canvasCards = messages
-      .flatMap((m) => (m.toolCalls ?? [])
-          .filter((tc) =>
-              tc.function?.name === 'render_chart' &&
-              tc.result?.type === 'image' &&
-              tc.result?.attachment?.id
-          )
-          .map((tc) => ({
-              ...tc.result.attachment,
-              messageId: m.id,
-              toolCallId: tc.id,
-              createdAt: m.timestamp ?? Date.now()
-          }))
+      .flatMap((m) => (m.output ?? [])
+          .filter((item) => item.type === 'function_call' && item.name === 'render_chart')
+          .map((call) => {
+              const result = (m.output ?? []).find(
+                  (item) => item.type === 'function_call_output' && item.call_id === call.call_id
+              );
+              return result
+                  ? dataAnalysisChartFromToolOutput({ call, result, messageId: m.id })
+                  : null;
+          })
+          .filter(Boolean)
       );
   ```
 - **無獨立 state**（除了 ephemeral scroll position）
@@ -695,7 +702,7 @@ export const workspaceEvents = (() => {
 - User 改 dataset → 1) 更新 store 2) 寫回 `chat.chat.metadata` via `updateChatById`
 
 ### 3.4 Canvas state 是 derived，不要存
-- Canvas cards 從 `history.messages[].toolCalls[]` derived（見 §2.3）
+- Canvas cards 從 assistant `history.messages[].output[]` 的 tool call/output pairs derived（見 §2.3）
 - Scroll position / collapse state / highlighted card id：local component state，**不 persist**
 
 ---
@@ -730,7 +737,7 @@ User clicks "📊 定位" in chat (rendered by native ResponseMessage)
 
 ### 4.3 New chart streamed → Canvas auto-scroll
 ```
-Native Chat updates history.messages[].toolCalls[]
+Native Chat updates assistant history messages (`message.output[]` + serialized tool-call details)
   └─> CanvasFeed reactive: $: canvasCards = ...derive...
       └─> canvasCards.length 增加
           └─> afterUpdate hook:
@@ -744,7 +751,7 @@ Native Chat updates history.messages[].toolCalls[]
 ```
 Native Chat completes message
   └─> 原生機制自動 updateChatById (history persist)
-  └─> Vertical 不需要做任何事 — toolCalls 自動進 chat document
+  └─> Vertical 不需要做任何事 — native tool-call output 自動進 chat document
 ```
 
 ---
@@ -782,14 +789,14 @@ export const scrollToBottom = (el: HTMLElement, behavior: ScrollBehavior = 'smoo
 ## 6. Native Chat Extension Hooks（Placeholder & Caption）
 
 ### 6.1 問題
-原生 `<ResponseMessage>` 看到 `tool_calls.result.attachment.type === 'image'` 會自動 render 一張圖（依 [inventory-results.md] Day 1 確認的渲染路徑）。但我們希望在 chat 內顯示**小 placeholder**（「📊 已加到分析畫布」+ 定位 button），而非完整大圖（大圖在中間欄）。
+原生 `<ResponseMessage>` 不讀 `tool_calls.result.attachment.type === 'image'` 這種物件路徑。實際渲染路徑是 `message.content` → `ContentRenderer` → `MarkdownTokens` → `ToolCallDisplay`，圖片若存在則來自 `<details type="tool_calls" files="...">`。我們希望在 chat 內顯示**小 placeholder**（「📊 已加到分析畫布」+ 定位 button），而非完整大圖（大圖在中間欄）。
 
 ### 6.2 Day 1 inventory 必須確認的兩條路徑
 
-**Path-FE-A（首選）**：原生支援 `attachment.metadata.render_mode = 'placeholder'`
-- 原生看到此 flag → render 我們指定的 component
+**Path-FE-A（首選）**：原生支援 tool-call file/result render hook
+- 原生看到某個 `files[].metadata.render_mode` 或 equivalent hook → render 我們指定的 component
 - 從 inventory Day 1 確認原生是否支援
-- 若支援 → tool function `render_chart` 回 `attachment.metadata.render_mode = 'placeholder-with-canvas-link'`
+- 若支援 → tool function `render_chart` 回可被 `process_tool_result` 轉成 `function_call_output.files` 的 file object，metadata 帶 `render_mode = 'placeholder-with-canvas-link'`
 - 前端透過 native slot / customElement registry 注入 `<ChatPlaceholder>` 元件
 
 **Path-FE-B（fallback）**：覆寫 `<ResponseMessage>` 內的 attachment renderer
@@ -848,7 +855,7 @@ export const scrollToBottom = (el: HTMLElement, behavior: ScrollBehavior = 'smoo
    - 若否 → redirect to `/c/{chatId}`（這是 generic chat，不該在 vertical 路由）
 3. 從 `chat.chat.metadata.data_analysis.selected_dataset_id` set `selectedDatasetId` store
 4. 把 `chat.chat.history` 傳給原生 `<Chat>` 渲染
-5. CanvasFeed reactive `$: canvasCards` 自動從 history.toolCalls derive 出所有歷史圖表
+5. CanvasFeed reactive `$: canvasCards` 自動從 assistant `history.messages[].output[]` derive 出所有歷史圖表
 6. 每張 ChartCardCanvas 的 `<img src>` 指向 `/api/v1/data-analysis/charts/{id}.png`
    - 若 cache 還在 → 直接顯示
    - 若 cache miss → backend regen → 仍顯示（user 感受到 ~3s 延遲首張，後續正常）
@@ -960,7 +967,7 @@ metadata: object
 | 自寫 `MessageThread.svelte` | 用原生 `<Chat>` |
 | 自寫 streaming reducer | 原生處理 |
 | 從 `chat.chat` 以外的地方持久化 vertical state | 一律進 `chat.chat.metadata` |
-| Canvas 維護獨立 `cards: Card[]` | 永遠 derived from `history.messages[].toolCalls[]` |
+| Canvas 維護獨立 `cards: Card[]` | 永遠 derived from assistant `history.messages[].output[]` tool call/output pairs |
 | Sidebar 加全域 store 紀錄目前 vertical | 用 `$page.url.pathname` 判斷 |
 | `<img>` 失敗就 crash | `on:error` fallback + retry |
 | 前端硬寫 chart_type 字串 | 從 spec 引入 const |

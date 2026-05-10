@@ -69,7 +69,7 @@
 
 ### Tool Calling UI
 - `<details type="tool_calls">` rendering（native）
-- `message.toolCalls[]`
+- assistant `message.output[]` + serialized `<details type="tool_calls">`（current frontend does not expose `message.toolCalls[]`）
 - `message.statusHistory[]`
 
 ### Models / Settings
@@ -132,7 +132,7 @@ Tier 3：
 | 自定 `metadata.thinking_content` | 原生 `<think>` in content |
 | 自定 vertical 表 | `chat.metadata` (除 ledger) |
 | 自刻 token fallback | `Depends(get_verified_user)` |
-| Page-level `resultCards[]` | 從 `message.toolCalls[]` derive |
+| Page-level `resultCards[]` | 從 assistant `message.output[]` / `<details type="tool_calls">` derive |
 | `f'card-{index}'` ID | `uuid4().hex` |
 
 ---

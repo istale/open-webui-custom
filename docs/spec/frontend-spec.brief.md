@@ -64,7 +64,7 @@ src/routes/(app)/workspace/data-analysis/
 ### Anti-patterns
 - ❌ 全域 store 記 vertical mode → 用 `$page.url.pathname`
 - ❌ `+layout.svelte` 內 `goto()` → 用 `+layout.ts.load()`
-- ❌ Page-level `cards: Card[]` → derived from `history.messages[].toolCalls[]`
+- ❌ Page-level `cards: Card[]` → derived from assistant `history.messages[].output[]` tool call/output pairs
 - ❌ 自定 SSE event → tool calling
 - ❌ Mutate native stores → 用原生 API
 - ❌ Sidebar 點 vertical chat 跳 `/c/` → 偵測 metadata 切路徑
@@ -129,7 +129,7 @@ export let onResize: (newClientX: number) => void;
 ```ts
 export let messages: ChatMessage[];
 export let isStreaming: boolean;
-// Derived: canvasCards (見 §4.3)
+// Derived: canvasCards from message.output[] function_call + function_call_output pairs (見 §4.3)
 // Auto-scroll: 200px threshold + "↓ 有新圖表" floating button
 // Listens: workspaceEvents.focusCanvasCard → scrollIntoView + highlight 1.5s
 ```
@@ -229,14 +229,12 @@ User clicks "定位" in chat (rendered by injected <ChatPlaceholder>)
 
 ### 4.3 New chart streamed
 ```
-Native Chat updates history.messages[].toolCalls[]
+Native Chat updates assistant messages (`message.output[]` + serialized tool-call details)
   → CanvasFeed reactive:
       $: canvasCards = messages
-          .flatMap(m => (m.toolCalls ?? [])
-              .filter(tc => tc.function?.name === 'render_chart' &&
-                            tc.result?.type === 'image' &&
-                            tc.result?.attachment?.id)
-              .map(tc => ({ ...tc.result.attachment, messageId: m.id, toolCallId: tc.id })))
+          .flatMap(m => (m.output ?? [])
+              .match(function_call name=render_chart with function_call_output)
+              .map(({ call, result }) => dataAnalysisChartFromToolOutput({ call, result, messageId: m.id })))
   → afterUpdate hook:
       if (isNearBottom() || forceScrollOnSubmit) scrollToBottom()
       else showNewChartButton = true
@@ -279,7 +277,7 @@ export const scrollToBottom = (el, behavior = 'smooth') =>
 
 ### Path FE-A/B/C decision
 依 [`inventory-results.md`](./inventory-results.md) 選一：
-- **FE-A**: 原生支援 `attachment.metadata.render_mode = 'placeholder'`
+- **FE-A**: 原生支援 tool-call file/result render hook such as `files[].metadata.render_mode`
 - **FE-B**: wrap / context cascade
 - **FE-C**: CSS hide + DOM mutation observer inject（`[core-touch]` 規避）
 
@@ -307,7 +305,7 @@ export const scrollToBottom = (el, behavior = 'smooth') =>
 2. Validate `metadata.workspace_type === 'data-analysis'`，否則 `goto('/c/' + chatId)`
 3. Set `selectedDatasetId` from `metadata.data_analysis.selected_dataset_id`
 4. Pass `chat.chat.history` 給 native `<Chat>`
-5. CanvasFeed reactive `canvasCards` 自動還原
+5. CanvasFeed reactive `canvasCards` 從 assistant `message.output[]` 自動還原
 6. ChartCardCanvas 的 `<img>` URL 指向 `/api/v1/data-analysis/charts/{id}.png`
 7. Cache miss → backend 自動 regen（~3s 首張延遲）
 

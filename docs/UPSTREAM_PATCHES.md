@@ -129,7 +129,7 @@ npm test
 - **Status**: ⏳ Pending Day 1 inventory
 - **File**: `src/lib/components/chat/Messages/ResponseMessage.svelte`（如果 Path FE-C）
 - **Decision**: Path FE-A / FE-B / FE-C — 未定
-  - Path FE-A: 原生支援 `attachment.metadata.render_mode = 'placeholder'` → **0 core touch**
+  - Path FE-A: 原生支援 tool-call file/result render hook（例如 `files[].metadata.render_mode`）→ **0 core touch**
   - Path FE-B: wrap / context cascade → 0 core touch（在 vertical 內處理）
   - Path FE-C: native ResponseMessage hard-code 圖片渲染 → conditional patch
 - **If Path FE-C, intended hook**:
