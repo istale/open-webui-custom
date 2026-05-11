@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from open_webui.utils.auth import get_verified_user
 from open_webui.utils.data_analysis.chart_store import get_chart_store
 from open_webui.utils.data_analysis.event_logger import log_event
+from open_webui.utils.data_analysis import get_repository
 
 router = APIRouter()
 
@@ -30,6 +31,25 @@ class FrontendEventPayload(BaseModel):
     chart_type: str | None = None
     duration_ms: int | None = None
     error_code: str | None = None
+
+
+def _dataset_to_response(dataset) -> dict:
+    return {
+        'id': dataset.id,
+        'name': dataset.name,
+        'description': dataset.description,
+        'row_count': dataset.row_count,
+        'column_count': dataset.column_count,
+        'updated_at': dataset.updated_at.isoformat(),
+        'tags': dataset.tags,
+    }
+
+
+@router.get('/datasets')
+async def list_datasets(tags: str = '', user=Depends(get_verified_user)):
+    tag_list = [tag.strip() for tag in tags.split(',') if tag.strip()] or None
+    items = get_repository().list_datasets(user_id=user.id, tags=tag_list)
+    return {'schema_version': 1, 'items': [_dataset_to_response(item) for item in items]}
 
 
 @router.get('/charts/{chart_id}.png')
