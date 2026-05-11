@@ -3,7 +3,7 @@
 **Tag**: `ledger-done`
 **Date**: 2026-05-12 02:22 CST
 **Agent**: Codex
-**Branch HEAD**: `270ad1531`
+**Branch HEAD**: `ledger-done` tag target
 
 ---
 
@@ -25,10 +25,10 @@
 
 ## 📊 Diff Summary
 
-- Files changed: 15
-- Lines added: +1183
+- Files changed: 16
+- Lines added: +1269
 - Lines removed: -89
-- Commits since last checkpoint: 6
+- Commits since last checkpoint: 8
 - Tier 3 file count so far: 13 / 15
 
 ```bash
@@ -36,6 +36,8 @@ git log --oneline tools-done..ledger-done
 ```
 
 ```text
+<ledger-done> docs: finalize CP-5 handoff metadata
+1972eef58 docs: add CP-5 event ledger handoff
 270ad1531 docs: record P-008 core touch commit
 7cdefd2d6 [core-touch] feat: emit data analysis chat lifecycle events
 855404457 docs: record CP-5 core touch commit
