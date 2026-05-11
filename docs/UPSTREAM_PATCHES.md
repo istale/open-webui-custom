@@ -174,7 +174,7 @@ npm test
 - **File**: `backend/open_webui/main.py`
 - **Lines**: +4 lines（start worker during lifespan startup, stop/drain during shutdown）
 - **Commit prefix**: `[core-touch]`
-- **First introduced**: TBD（CP-5 implementation commit）
+- **First introduced**: `b87b62e1d`
 - **Why required**:
   Open WebUI has no generic worker plugin lifecycle. The data-analysis event
   ledger uses an async queue and background worker so analytics writes never
@@ -193,7 +193,7 @@ npm test
 - **File**: `backend/open_webui/models/chats.py`
 - **Lines**: +6 lines across native chat delete paths
 - **Commit prefix**: `[core-touch]`
-- **First introduced**: TBD（CP-5 implementation commit）
+- **First introduced**: `b87b62e1d`
 - **Why required**:
   The event ledger intentionally preserves analytics history after UI chat
   deletion. Native chat delete paths must mark matching ledger rows
