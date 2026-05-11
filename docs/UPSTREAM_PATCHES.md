@@ -233,7 +233,7 @@ npm test
 - **File**: `src/lib/components/chat/Chat.svelte`
 - **Lines**: ~15 lines across prop declarations, tool id merge, metadata persistence, and route replacement
 - **Commit prefix**: `[core-touch]`
-- **First introduced**: TBD（CP-6 implementation commit）
+- **First introduced**: `301e5c3f2`
 - **Why required**:
   Native `<Chat>` only exposes `chatIdProp`; the data-analysis workspace must
   inject `builtin:data-analysis` as a hidden tool id and persist
@@ -253,7 +253,7 @@ npm test
 - **File**: `src/lib/components/layout/Sidebar.svelte`, `src/lib/components/layout/Sidebar/ChatItem.svelte`
 - **Lines**: ~20 lines
 - **Commit prefix**: `[core-touch]`
-- **First introduced**: TBD（CP-6 implementation commit）
+- **First introduced**: `301e5c3f2`
 - **Why required**:
   Current Open WebUI has no dynamic workspace registry. The vertical needs a
   sidebar entry for `/workspace/data-analysis`, and existing chat rows link to
