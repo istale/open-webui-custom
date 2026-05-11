@@ -145,6 +145,30 @@ npm test
 - **CP-2 影響**：無（adapter 不依賴此決定）
 - **Will be promoted at CP-3 review**
 
+#### P-005 — Data Analysis Chart Image Router Include
+- **Status**: ✅ Active (approved CP-4)
+- **File**: `backend/open_webui/main.py`
+- **Lines**: +2 lines（router import + `app.include_router(...)`）
+- **Commit prefix**: `[core-touch]`
+- **First introduced**: TBD（CP-4 implementation commit）
+- **Why required**:
+  FastAPI requires explicit router inclusion in `main.py`. Needed for serving
+  dynamically generated chart PNGs from
+  `/api/v1/data-analysis/charts/{chart_id}.png`.
+- **Plan tier**: Plan C（confirmed CP-4 — no dynamic plugin router registration in current Open WebUI）
+- **Approval**: 2026-05-11 by user / Tech Lead
+- **Owner**: vertical/data-analysis backend
+- **Related spec**: [`data-analysis-vertical-spec.md`](./spec/data-analysis-vertical-spec.md)、[`tools-schema.md`](./spec/tools-schema.md)
+- **Removal condition**:
+  Upstream adds dynamic router/plugin registration or a supported extension
+  point for app-owned API routes → move router registration there and revert
+  this `main.py` include.
+- **Code snippet** (參考用，實際以 commit diff 為準):
+  ```python
+  from open_webui.routers import data_analysis
+  app.include_router(data_analysis.router, prefix='/api/v1/data-analysis', tags=['data-analysis'])
+  ```
+
 ---
 
 ## Removed Patches（歷史紀錄）

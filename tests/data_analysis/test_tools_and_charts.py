@@ -87,6 +87,13 @@ def test_render_chart_returns_image_attachment_and_files(tools):
     assert record.chat_id == 'chat-1'
 
 
+def test_main_mounts_data_analysis_router():
+    main_source = Path('backend/open_webui/main.py').read_text()
+
+    assert 'data_analysis,' in main_source
+    assert "app.include_router(data_analysis.router, prefix='/api/v1/data-analysis'" in main_source
+
+
 def test_render_chart_cache_miss_mentions_query_id_expired(tools):
     with pytest.raises(ValueError, match='query_id .* expired or not found'):
         tools.render_chart(
