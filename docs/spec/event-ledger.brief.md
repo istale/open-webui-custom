@@ -56,7 +56,7 @@ CREATE TABLE data_analysis_events (
 
 ---
 
-## P0 Events (12)
+## P0 Events (13)
 
 | event_type | payload 必填 | Emit 點 |
 |---|---|---|
@@ -213,13 +213,13 @@ WHERE chat_id = $2;
 - [ ] Migration 過，6 個 index 在
 - [ ] `bulk_insert` / `mark_deleted` unit tests
 - [ ] Background worker 正常 batch + shutdown drain
-- [ ] 12 個 P0 events 全部覆蓋 emit 點
+- [ ] 13 個 P0 events 全部覆蓋 emit 點
 - [ ] Frontend events endpoint whitelist 拒未知 event_type
 - [ ] Thinking 偵測 vertical-only，不污染 generic chat
 - [ ] Soft delete：刪 chat 後 events `is_deleted=TRUE`
 - [ ] E2E 測：完整 workflow 看 trace 順序正確
 - [ ] Queue full 測：11k events 前 1k 丟失但 log warning
-- [ ] 12 個 events 各至少 1 fixture，能跑 query examples
+- [ ] 13 個 events 各至少 1 fixture，能跑 query examples
 
 ---
 

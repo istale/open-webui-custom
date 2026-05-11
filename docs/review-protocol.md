@@ -93,7 +93,7 @@
 ### CP-5：Event Ledger
 - **Tag**：`ledger-done`
 - **對應 Day**：part of 5/6（看實作順序）
-- **Trigger**：DB migration + worker + 12 P0 events 整合 + soft delete
+- **Trigger**：DB migration + worker + 13 P0 events 整合 + soft delete
 - **Required deliverables**：
   - Migration file: `<n>_add_data_analysis_events.py`
   - `models/data_analysis_events.py` + `bulk_insert` + `mark_deleted`
@@ -101,7 +101,7 @@
   - `main.py` startup/shutdown hook（仍是同一個 `[core-touch]`，加 worker lifecycle）
   - Frontend `events.ts` client + 5 處 emit
   - Backend tool functions 整合 emit
-  - 12 個 P0 events 各至少 1 筆 fixture
+  - 13 個 P0 events 各至少 1 筆 fixture
 - **Review focus**：
   - Tool function 用 `asyncio.create_task(log_event(...))`，**不**等 await
   - Queue full 時 `log.warning` 而非 raise？
