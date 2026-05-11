@@ -169,6 +169,45 @@ npm test
   app.include_router(data_analysis.router, prefix='/api/v1/data-analysis', tags=['data-analysis'])
   ```
 
+#### P-006 — Data Analysis Event Worker Lifecycle Hook
+- **Status**: ✅ Active (approved CP-5)
+- **File**: `backend/open_webui/main.py`
+- **Lines**: +4 lines（start worker during lifespan startup, stop/drain during shutdown）
+- **Commit prefix**: `[core-touch]`
+- **First introduced**: TBD（CP-5 implementation commit）
+- **Why required**:
+  Open WebUI has no generic worker plugin lifecycle. The data-analysis event
+  ledger uses an async queue and background worker so analytics writes never
+  block chat/tool execution, and the worker must be started/stopped inside the
+  FastAPI lifespan for graceful shutdown.
+- **Plan tier**: Plan C（tiny explicit lifecycle hook）
+- **Approval**: 2026-05-12 by user / Tech Lead
+- **Owner**: vertical/data-analysis backend
+- **Related spec**: [`event-ledger.md`](./spec/event-ledger.md)
+- **Removal condition**:
+  Upstream adds a supported background-worker registration API → move
+  `start_event_worker` / `stop_event_worker` there and revert this hook.
+
+#### P-007 — Data Analysis Chat Delete Soft-Delete Hook
+- **Status**: ✅ Active (approved CP-5)
+- **File**: `backend/open_webui/models/chats.py`
+- **Lines**: +6 lines across native chat delete paths
+- **Commit prefix**: `[core-touch]`
+- **First introduced**: TBD（CP-5 implementation commit）
+- **Why required**:
+  The event ledger intentionally preserves analytics history after UI chat
+  deletion. Native chat delete paths must mark matching ledger rows
+  `is_deleted = TRUE` / `deleted_at = ...` to avoid orphaned active analytics
+  events while still retaining historical data.
+- **Plan tier**: Plan C（tiny explicit delete hook; logic remains in `models/data_analysis_events.py`）
+- **Approval**: 2026-05-12 by user / Tech Lead
+- **Owner**: vertical/data-analysis backend
+- **Related spec**: [`event-ledger.md`](./spec/event-ledger.md)
+- **Removal condition**:
+  Upstream adds a deletion lifecycle/hook mechanism for chat-owned extension
+  data → register the ledger soft-delete there and revert this native model
+  touch.
+
 ---
 
 ## Removed Patches（歷史紀錄）

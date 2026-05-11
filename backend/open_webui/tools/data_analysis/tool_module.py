@@ -9,6 +9,7 @@ tool call.
 
 from __future__ import annotations
 
+import time
 from dataclasses import asdict, is_dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -16,8 +17,9 @@ from uuid import uuid4
 
 from open_webui.utils.data_analysis import get_repository
 from open_webui.utils.data_analysis.chart_store import ChartRecord, get_chart_store
+from open_webui.utils.data_analysis.event_logger import schedule_log_event
 from open_webui.utils.data_analysis.query_cache import get_query_cache
-from open_webui.utils.data_analysis.repository import DatasetMeta, QueryResult, RepositoryError
+from open_webui.utils.data_analysis.repository import DatasetMeta, QueryResult
 
 
 def _json_ready(value: Any) -> Any:
@@ -51,6 +53,44 @@ def _require_user(__user__: dict | None) -> str:
 
 def _parse_csv(value: str) -> list[str]:
     return [item.strip() for item in value.split(',') if item.strip()]
+
+
+def _context_from_metadata(metadata: dict | None) -> tuple[str | None, str | None]:
+    metadata = metadata or {}
+    return metadata.get('chat_id'), metadata.get('message_id')
+
+
+def _error_code(exc: Exception) -> str:
+    return exc.__class__.__name__.replace('Error', '').upper() or 'ERROR'
+
+
+def _emit_tool_event(
+    *,
+    event_type: str,
+    user_id: str,
+    metadata: dict | None,
+    payload: dict[str, Any],
+    tool_name: str,
+    started_at: float,
+    dataset_id: str | None = None,
+    chart_type: str | None = None,
+    success: bool = True,
+    error_code: str | None = None,
+) -> None:
+    chat_id, message_id = _context_from_metadata(metadata)
+    schedule_log_event(
+        event_type=event_type,
+        user_id=user_id,
+        chat_id=chat_id,
+        message_id=message_id,
+        payload=_json_ready(payload),
+        dataset_id=dataset_id,
+        chart_type=chart_type,
+        tool_name=tool_name,
+        duration_ms=int((time.perf_counter() - started_at) * 1000),
+        success=success,
+        error_code=error_code,
+    )
 
 
 def _statistics_for_df(df) -> dict[str, Any]:
@@ -91,37 +131,89 @@ class Tools:
             self._repo = get_repository()
         return self._repo
 
-    def list_datasets(self, tags: str = '', __user__: dict | None = None) -> dict[str, Any]:
+    def list_datasets(
+        self,
+        tags: str = '',
+        __user__: dict | None = None,
+        __metadata__: dict | None = None,
+    ) -> dict[str, Any]:
         """List manufacturing datasets the current user can access.
 
         :param tags: Optional comma-separated tag filter, for example "production,line-a".
         :return: JSON object with schema_version and an items list of dataset metadata.
         """
+        started_at = time.perf_counter()
         user_id = _require_user(__user__)
-
         tag_list = [tag.strip() for tag in tags.split(',') if tag.strip()] or None
 
         try:
             items = self.repo.list_datasets(user_id=user_id, tags=tag_list)
-        except RepositoryError:
-            raise
         except Exception as exc:
+            _emit_tool_event(
+                event_type='tool.list_datasets.failed',
+                user_id=user_id,
+                metadata=__metadata__,
+                payload={'tags': tags, 'error_message': str(exc)},
+                tool_name='list_datasets',
+                started_at=started_at,
+                success=False,
+                error_code=_error_code(exc),
+            )
             raise RuntimeError(f'Unable to list manufacturing datasets: {exc}') from exc
 
-        return {
+        response = {
             'schema_version': 1,
             'items': [_dataset_to_response(item) for item in items],
         }
+        _emit_tool_event(
+            event_type='tool.list_datasets.succeeded',
+            user_id=user_id,
+            metadata=__metadata__,
+            payload={'tags': tags, 'count': len(items)},
+            tool_name='list_datasets',
+            started_at=started_at,
+        )
+        return response
 
-    def get_dataset_schema(self, dataset_id: str, __user__: dict | None = None) -> dict[str, Any]:
+    def get_dataset_schema(
+        self,
+        dataset_id: str,
+        __user__: dict | None = None,
+        __metadata__: dict | None = None,
+    ) -> dict[str, Any]:
         """Get column schema and metadata for a manufacturing dataset.
 
         :param dataset_id: Dataset identifier from list_datasets.
         :return: JSON object with dataset metadata and column schema.
         """
+        started_at = time.perf_counter()
         user_id = _require_user(__user__)
-        meta = self.repo.get_metadata(dataset_id, user_id=user_id)
-        return {'schema_version': 1, 'dataset': _dataset_to_response(meta)}
+        try:
+            meta = self.repo.get_metadata(dataset_id, user_id=user_id)
+        except Exception as exc:
+            _emit_tool_event(
+                event_type='tool.get_dataset_schema.failed',
+                user_id=user_id,
+                metadata=__metadata__,
+                payload={'dataset_id': dataset_id, 'error_message': str(exc)},
+                tool_name='get_dataset_schema',
+                dataset_id=dataset_id,
+                started_at=started_at,
+                success=False,
+                error_code=_error_code(exc),
+            )
+            raise
+        response = {'schema_version': 1, 'dataset': _dataset_to_response(meta)}
+        _emit_tool_event(
+            event_type='tool.get_dataset_schema.succeeded',
+            user_id=user_id,
+            metadata=__metadata__,
+            payload={'dataset_id': dataset_id, 'column_count': meta.column_count},
+            tool_name='get_dataset_schema',
+            dataset_id=dataset_id,
+            started_at=started_at,
+        )
+        return response
 
     def query_dataset(
         self,
@@ -129,6 +221,7 @@ class Tools:
         query: str,
         max_rows: int = 100,
         __user__: dict | None = None,
+        __metadata__: dict | None = None,
     ) -> dict[str, Any]:
         """Run a SELECT query and cache the full result server-side.
 
@@ -137,24 +230,39 @@ class Tools:
         :param max_rows: Maximum preview rows to return to the model.
         :return: JSON object with query_id, row_count, preview rows, dtypes, and statistics.
         """
+        started_at = time.perf_counter()
         user_id = _require_user(__user__)
         preview_rows = max(1, min(int(max_rows or 100), 500))
-        result = self.repo.execute_query(
-            dataset_id,
-            query,
-            user_id=user_id,
-            max_rows=10_000_000,
-            timeout_s=30,
-        )
-        query_id = self.query_cache.put(
-            dataset_id=dataset_id,
-            sql=query,
-            df=result.df,
-            user_id=user_id,
-            row_count=result.row_count,
-            ttl_s=3600,
-        )
-        return {
+        try:
+            result = self.repo.execute_query(
+                dataset_id,
+                query,
+                user_id=user_id,
+                max_rows=10_000_000,
+                timeout_s=30,
+            )
+            query_id = self.query_cache.put(
+                dataset_id=dataset_id,
+                sql=query,
+                df=result.df,
+                user_id=user_id,
+                row_count=result.row_count,
+                ttl_s=3600,
+            )
+        except Exception as exc:
+            _emit_tool_event(
+                event_type='tool.query_dataset.failed',
+                user_id=user_id,
+                metadata=__metadata__,
+                payload={'sql': query, 'error_message': str(exc)},
+                tool_name='query_dataset',
+                dataset_id=dataset_id,
+                started_at=started_at,
+                success=False,
+                error_code=_error_code(exc),
+            )
+            raise
+        response = {
             'schema_version': 1,
             'query_id': query_id,
             'dataset_id': dataset_id,
@@ -166,6 +274,21 @@ class Tools:
             'preview': _preview_from_result(result, preview_rows),
             'statistics': _statistics_for_df(result.df),
         }
+        _emit_tool_event(
+            event_type='tool.query_dataset.succeeded',
+            user_id=user_id,
+            metadata=__metadata__,
+            payload={
+                'sql': query,
+                'query_id': query_id,
+                'row_count': result.row_count,
+                'truncated': result.truncated,
+            },
+            tool_name='query_dataset',
+            dataset_id=dataset_id,
+            started_at=started_at,
+        )
+        return response
 
     def render_chart(
         self,
@@ -200,26 +323,53 @@ class Tools:
         :param explanation_notes: Optional notes for analyst audit.
         :return: JSON object describing the rendered chart image attachment.
         """
+        started_at = time.perf_counter()
         user_id = _require_user(__user__)
         entry = self.query_cache.get(query_id, user_id=user_id)
         if entry is None:
-            raise ValueError(f'query_id {query_id} expired or not found. Please re-run query_dataset.')
+            exc = ValueError(f'query_id {query_id} expired or not found. Please re-run query_dataset.')
+            _emit_tool_event(
+                event_type='tool.render_chart.failed',
+                user_id=user_id,
+                metadata=__metadata__,
+                payload={'query_id': query_id, 'chart_type': chart_type, 'error_message': str(exc)},
+                tool_name='render_chart',
+                chart_type=chart_type,
+                started_at=started_at,
+                success=False,
+                error_code='QUERY_ID_NOT_FOUND',
+            )
+            raise exc
 
         from open_webui.utils.data_analysis.chart_renderer import render_matplotlib_chart
 
         chart_id = uuid4().hex
         image_path, thumb_path = self.chart_store.paths_for(chart_id)
-        render_info = render_matplotlib_chart(
-            entry.df,
-            chart_type=chart_type,
-            x=x,
-            y=y,
-            title=title,
-            output_path=image_path,
-            thumb_path=thumb_path,
-            facet=facet,
-            color=color,
-        )
+        try:
+            render_info = render_matplotlib_chart(
+                entry.df,
+                chart_type=chart_type,
+                x=x,
+                y=y,
+                title=title,
+                output_path=image_path,
+                thumb_path=thumb_path,
+                facet=facet,
+                color=color,
+            )
+        except Exception as exc:
+            _emit_tool_event(
+                event_type='tool.render_chart.failed',
+                user_id=user_id,
+                metadata=__metadata__,
+                payload={'query_id': query_id, 'chart_type': chart_type, 'error_message': str(exc)},
+                tool_name='render_chart',
+                chart_type=chart_type,
+                started_at=started_at,
+                success=False,
+                error_code=_error_code(exc),
+            )
+            raise
         chat_id = (__metadata__ or {}).get('chat_id')
         self.chart_store.put(
             ChartRecord(
@@ -234,7 +384,7 @@ class Tools:
             )
         )
 
-        return {
+        response = {
             'schema_version': 1,
             'type': 'image',
             'attachment': {
@@ -263,6 +413,22 @@ class Tools:
                 },
             },
         }
+        _emit_tool_event(
+            event_type='tool.render_chart.succeeded',
+            user_id=user_id,
+            metadata=__metadata__,
+            payload={
+                'chart_type': render_info['chart_type'],
+                'query_id': query_id,
+                'chart_id': chart_id,
+                'image_size_bytes': render_info['image_size_bytes'],
+                'statistics': response['attachment']['metadata']['explanation']['statistics'],
+            },
+            tool_name='render_chart',
+            chart_type=render_info['chart_type'],
+            started_at=started_at,
+        )
+        return response
 
     def summarize_data(
         self,
@@ -271,6 +437,7 @@ class Tools:
         summary: str,
         key_findings: str = '',
         __user__: dict | None = None,
+        __metadata__: dict | None = None,
     ) -> dict[str, Any]:
         """Package a textual summary of a cached query result.
 
@@ -280,13 +447,25 @@ class Tools:
         :param key_findings: Optional newline- or semicolon-separated finding list.
         :return: JSON object with summary content and query audit context.
         """
+        started_at = time.perf_counter()
         user_id = _require_user(__user__)
         entry = self.query_cache.get(query_id, user_id=user_id)
         if entry is None:
-            raise ValueError(f'query_id {query_id} expired or not found. Please re-run query_dataset.')
+            exc = ValueError(f'query_id {query_id} expired or not found. Please re-run query_dataset.')
+            _emit_tool_event(
+                event_type='tool.summarize_data.failed',
+                user_id=user_id,
+                metadata=__metadata__,
+                payload={'query_id': query_id, 'error_message': str(exc)},
+                tool_name='summarize_data',
+                started_at=started_at,
+                success=False,
+                error_code='QUERY_ID_NOT_FOUND',
+            )
+            raise exc
 
         findings = [item.strip('- ').strip() for item in key_findings.replace(';', '\n').splitlines() if item.strip()]
-        return {
+        response = {
             'schema_version': 1,
             'type': 'summary',
             'title': title,
@@ -298,3 +477,13 @@ class Tools:
                 'row_count': entry.row_count,
             },
         }
+        _emit_tool_event(
+            event_type='tool.summarize_data.succeeded',
+            user_id=user_id,
+            metadata=__metadata__,
+            payload={'query_id': query_id, 'title': title, 'key_finding_count': len(findings)},
+            tool_name='summarize_data',
+            dataset_id=entry.dataset_id,
+            started_at=started_at,
+        )
+        return response

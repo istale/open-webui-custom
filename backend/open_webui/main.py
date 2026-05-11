@@ -741,9 +741,11 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             log.warning(f'Failed to initialize terminal servers at startup: {e}')
 
-    # [core-touch] Seed vertical tools after native tool-server setup and before readiness.
+    # [core-touch] Seed vertical tools and start their non-blocking ledger worker.
     from open_webui.tools.data_analysis import register_builtin_data_analysis_tool
     await register_builtin_data_analysis_tool(app)
+    from open_webui.utils.data_analysis.event_logger import start_event_worker
+    start_event_worker(app)
 
     # Mark application as ready to accept traffic from a startup perspective.
     app.state.startup_complete = True
@@ -751,6 +753,9 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown: clean up shared resources
+    from open_webui.utils.data_analysis.event_logger import stop_event_worker
+    await stop_event_worker()
+
     from open_webui.utils.session_pool import close_session
 
     await close_session()
