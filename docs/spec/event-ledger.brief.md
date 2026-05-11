@@ -17,6 +17,10 @@ Ledger 是**附加**，不取代 chat metadata。
 
 ## Schema
 
+Migration contract: use the repo's current Alembic `upgrade()` / `downgrade()`
+format under `backend/open_webui/migrations/versions/`. Do not use the older
+`peewee_migrate.Migrator` style in this codebase.
+
 ```sql
 CREATE TABLE data_analysis_events (
     id            TEXT PRIMARY KEY,            -- uuid4

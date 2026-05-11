@@ -152,47 +152,56 @@ Partial index（`WHERE`）：縮小 index 大小，提升查詢速度。
 
 ### 2.4 Migration
 
-新建 `backend/open_webui/migrations/versions/<next>_add_data_analysis_events.py`：
+新建 `backend/open_webui/migrations/versions/<next>_add_data_analysis_events.py`。
+
+> **Codebase correction (2026-05-12)**: current Open WebUI migrations in
+> `backend/open_webui/migrations/versions/` are Alembic revisions with
+> `upgrade()` / `downgrade()`, not `peewee_migrate.Migrator` files. The
+> `data_analysis_events` migration must follow the repo's Alembic pattern so it
+> participates in the same migration chain as native tables.
 
 ```python
 """add data_analysis_events table"""
-import peewee as pw
-from peewee_migrate import Migrator
+from typing import Union
+from alembic import op
+import sqlalchemy as sa
 
-def migrate(migrator: Migrator, database, *, fake=False):
-    @migrator.create_model
-    class DataAnalysisEvent(pw.Model):
-        id = pw.TextField(primary_key=True)
-        ts = pw.BigIntegerField(index=False)
-        user_id = pw.TextField()
-        user_org_id = pw.TextField(null=True)
-        chat_id = pw.TextField(null=True)
-        message_id = pw.TextField(null=True)
-        workspace = pw.TextField(default='data-analysis')
-        event_type = pw.TextField()
-        schema_version = pw.IntegerField(default=1)
-        payload = pw.TextField()  # JSONField in real impl
-        dataset_id = pw.TextField(null=True)
-        chart_type = pw.TextField(null=True)
-        tool_name = pw.TextField(null=True)
-        duration_ms = pw.IntegerField(null=True)
-        success = pw.BooleanField(default=True)
-        error_code = pw.TextField(null=True)
-        is_deleted = pw.BooleanField(default=False)
-        deleted_at = pw.BigIntegerField(null=True)
+revision = '<next>'
+down_revision: Union[str, None] = '<previous>'
+branch_labels = None
+depends_on = None
 
-        class Meta:
-            table_name = 'data_analysis_events'
+def upgrade():
+    op.create_table(
+        'data_analysis_events',
+        sa.Column('id', sa.Text(), primary_key=True),
+        sa.Column('ts', sa.BigInteger(), nullable=False),
+        sa.Column('user_id', sa.Text(), nullable=False),
+        sa.Column('user_org_id', sa.Text(), nullable=True),
+        sa.Column('chat_id', sa.Text(), nullable=True),
+        sa.Column('message_id', sa.Text(), nullable=True),
+        sa.Column('workspace', sa.Text(), nullable=False, server_default='data-analysis'),
+        sa.Column('event_type', sa.Text(), nullable=False),
+        sa.Column('schema_version', sa.Integer(), nullable=False, server_default='1'),
+        sa.Column('payload', sa.JSON(), nullable=False),
+        sa.Column('dataset_id', sa.Text(), nullable=True),
+        sa.Column('chart_type', sa.Text(), nullable=True),
+        sa.Column('tool_name', sa.Text(), nullable=True),
+        sa.Column('duration_ms', sa.Integer(), nullable=True),
+        sa.Column('success', sa.Boolean(), nullable=False, server_default=sa.true()),
+        sa.Column('error_code', sa.Text(), nullable=True),
+        sa.Column('is_deleted', sa.Boolean(), nullable=False, server_default=sa.false()),
+        sa.Column('deleted_at', sa.BigInteger(), nullable=True),
+    )
+    op.create_index('idx_events_user_ts', 'data_analysis_events', ['user_id', 'ts'])
+    op.create_index('idx_events_chat_ts', 'data_analysis_events', ['chat_id', 'ts'])
+    op.create_index('idx_events_event_type_ts', 'data_analysis_events', ['event_type', 'ts'])
+    op.create_index('idx_events_dataset_ts', 'data_analysis_events', ['dataset_id', 'ts'])
+    op.create_index('idx_events_chart_type_ts', 'data_analysis_events', ['chart_type', 'ts'])
+    op.create_index('idx_events_success_ts', 'data_analysis_events', ['success', 'ts'])
 
-    migrator.add_index('data_analysis_events', 'user_id', 'ts')
-    migrator.add_index('data_analysis_events', 'chat_id', 'ts')
-    migrator.add_index('data_analysis_events', 'event_type', 'ts')
-    migrator.add_index('data_analysis_events', 'dataset_id', 'ts')
-    migrator.add_index('data_analysis_events', 'chart_type', 'ts')
-    migrator.add_index('data_analysis_events', 'success', 'ts')
-
-def rollback(migrator: Migrator, database, *, fake=False):
-    migrator.remove_model('data_analysis_events')
+def downgrade():
+    op.drop_table('data_analysis_events')
 ```
 
 ---
