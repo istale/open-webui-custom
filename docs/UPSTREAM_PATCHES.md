@@ -213,7 +213,7 @@ npm test
 - **File**: `backend/open_webui/utils/middleware.py`
 - **Lines**: ~25 lines across native non-streaming and streaming completion paths
 - **Commit prefix**: `[core-touch]`
-- **First introduced**: TBD（CP-5 P-008 implementation commit）
+- **First introduced**: `7cdefd2d6`
 - **Why required**:
   The event ledger needs `model.thinking_completed` and
   `message.assistant_completed` events, but Open WebUI owns the native
