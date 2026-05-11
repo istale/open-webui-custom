@@ -233,7 +233,7 @@ npm test
 - **File**: `src/lib/components/chat/Chat.svelte`
 - **Lines**: ~15 lines across prop declarations, tool id merge, metadata persistence, and route replacement
 - **Commit prefix**: `[core-touch]`
-- **First introduced**: `301e5c3f2`
+- **First introduced**: `301e5c3f2`, callback extension `a89c20ba2`
 - **Why required**:
   Native `<Chat>` only exposes `chatIdProp`; the data-analysis workspace must
   inject `builtin:data-analysis` as a hidden tool id and persist
