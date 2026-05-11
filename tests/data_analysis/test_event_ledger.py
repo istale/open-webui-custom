@@ -20,6 +20,7 @@ from open_webui.utils.data_analysis.event_fixtures import P0_EVENT_FIXTURES
 from open_webui.utils.data_analysis.event_logger import (
     log_event,
     reset_event_logger_for_tests,
+    schedule_chat_lifecycle_events,
     start_event_worker,
     stop_event_worker,
 )
@@ -136,11 +137,66 @@ def test_tool_query_and_render_emit_backend_events(monkeypatch, tmp_path):
     assert all(event['chat_id'] == 'chat-1' for event in emitted)
 
 
+def test_chat_lifecycle_events_emit_for_vertical_context(monkeypatch):
+    emitted = []
+    monkeypatch.setattr('open_webui.utils.data_analysis.event_logger.schedule_log_event', lambda **kwargs: emitted.append(kwargs))
+
+    schedule_chat_lifecycle_events(
+        user_id='user-1',
+        metadata={
+            'workspace_type': 'data-analysis',
+            'chat_id': 'chat-1',
+            'message_id': 'msg-1',
+        },
+        output=[
+            {
+                'type': 'reasoning',
+                'duration': 2,
+                'content': [{'type': 'output_text', 'text': 'Need query then chart.'}],
+            },
+            {
+                'type': 'function_call',
+                'name': 'query_dataset',
+            },
+            {
+                'type': 'message',
+                'content': [{'type': 'output_text', 'text': 'Here is the trend.'}],
+            },
+        ],
+        content='Here is the trend.',
+        started_at=0,
+    )
+
+    event_types = [event['event_type'] for event in emitted]
+    assert event_types == ['model.thinking_completed', 'message.assistant_completed']
+    assert emitted[0]['payload']['thinking_text'] == 'Need query then chart.'
+    assert emitted[0]['duration_ms'] == 2000
+    assert emitted[1]['payload']['tool_call_count'] == 1
+    assert emitted[1]['payload']['had_thinking'] is True
+
+
+def test_chat_lifecycle_events_skip_non_vertical_context(monkeypatch):
+    emitted = []
+    monkeypatch.setattr('open_webui.utils.data_analysis.event_logger.schedule_log_event', lambda **kwargs: emitted.append(kwargs))
+
+    schedule_chat_lifecycle_events(
+        user_id='user-1',
+        metadata={'chat_id': 'chat-1', 'message_id': 'msg-1'},
+        output=[],
+        content='Generic chat response',
+        started_at=0,
+    )
+
+    assert emitted == []
+
+
 def test_core_hooks_are_recorded_in_source():
     main_source = Path('backend/open_webui/main.py').read_text()
     chats_source = Path('backend/open_webui/models/chats.py').read_text()
+    middleware_source = Path('backend/open_webui/utils/middleware.py').read_text()
 
     assert 'start_event_worker(app)' in main_source
     assert 'await stop_event_worker()' in main_source
     assert 'mark_deleted_safely' in chats_source
     assert 'mark_deleted_by_user_id_safely' in chats_source
+    assert 'schedule_chat_lifecycle_events' in middleware_source

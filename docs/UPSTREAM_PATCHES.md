@@ -208,6 +208,26 @@ npm test
   data → register the ledger soft-delete there and revert this native model
   touch.
 
+#### P-008 — Data Analysis Chat Lifecycle Ledger Hook
+- **Status**: ✅ Active (approved CP-5)
+- **File**: `backend/open_webui/utils/middleware.py`
+- **Lines**: ~25 lines across native non-streaming and streaming completion paths
+- **Commit prefix**: `[core-touch]`
+- **First introduced**: TBD（CP-5 P-008 implementation commit）
+- **Why required**:
+  The event ledger needs `model.thinking_completed` and
+  `message.assistant_completed` events, but Open WebUI owns the native
+  streaming lifecycle and final assistant-message completion state. There is no
+  plugin lifecycle hook for observing the finalized OR-style output items.
+- **Plan tier**: Plan B（tiny lifecycle hook; parsing and fail-safe scheduling remain in `utils/data_analysis/event_logger.py`）
+- **Approval**: 2026-05-12 by user / Tech Lead
+- **Owner**: vertical/data-analysis backend
+- **Related spec**: [`event-ledger.md`](./spec/event-ledger.md)
+- **Removal condition**:
+  Upstream adds a chat-completion lifecycle observer/hook that exposes
+  `metadata`, final assistant output, and completion timing → move
+  `schedule_chat_lifecycle_events` there and revert this middleware touch.
+
 ---
 
 ## Removed Patches（歷史紀錄）

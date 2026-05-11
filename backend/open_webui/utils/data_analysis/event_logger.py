@@ -74,6 +74,135 @@ def schedule_log_event(**kwargs) -> None:
         log.warning('data-analysis event scheduling failed: %s', exc)
 
 
+def schedule_chat_lifecycle_events(
+    *,
+    user_id: str,
+    metadata: dict[str, Any],
+    output: list[dict[str, Any]],
+    content: str,
+    started_at: float,
+) -> None:
+    """Emit vertical chat lifecycle events from native completion output.
+
+    Open WebUI owns the streaming state machine. The vertical only observes the
+    finalized OR-style output items, so the core middleware hook stays tiny and
+    cannot slow per-token streaming.
+    """
+    if not _is_data_analysis_context(metadata):
+        return
+
+    chat_id = metadata.get('chat_id')
+    message_id = metadata.get('message_id')
+    duration_ms = int((time.perf_counter() - started_at) * 1000)
+    reasoning_events = _reasoning_events_from_output(output, content)
+
+    for event in reasoning_events:
+        schedule_log_event(
+            event_type='model.thinking_completed',
+            user_id=user_id,
+            chat_id=chat_id,
+            message_id=message_id,
+            payload={
+                'thinking_text': event['thinking_text'],
+                'n_chars': len(event['thinking_text']),
+            },
+            duration_ms=event['duration_ms'],
+        )
+
+    schedule_log_event(
+        event_type='message.assistant_completed',
+        user_id=user_id,
+        chat_id=chat_id,
+        message_id=message_id,
+        payload={
+            'message_id': message_id,
+            'total_duration_ms': duration_ms,
+            'tool_call_count': _count_output_items(output, 'function_call'),
+            'n_chars': len(_visible_text_from_output(output, content)),
+            'had_thinking': bool(reasoning_events),
+        },
+        duration_ms=duration_ms,
+    )
+
+
+def _is_data_analysis_context(metadata: dict[str, Any]) -> bool:
+    if metadata.get('workspace_type') == 'data-analysis':
+        return True
+    tool_ids = metadata.get('tool_ids') or []
+    return 'builtin:data-analysis' in tool_ids
+
+
+def _reasoning_events_from_output(output: list[dict[str, Any]], content: str) -> list[dict[str, Any]]:
+    events = []
+    for item in output:
+        if item.get('type') != 'reasoning':
+            continue
+        text = _text_from_parts(item.get('content', [])) or _text_from_parts(item.get('summary', []))
+        if not text:
+            continue
+        duration_ms = _duration_ms_from_item(item)
+        events.append({'thinking_text': text, 'duration_ms': duration_ms})
+
+    if events:
+        return events
+
+    tagged_text = _extract_tagged_thinking(content)
+    if tagged_text:
+        return [{'thinking_text': tagged_text, 'duration_ms': None}]
+
+    return []
+
+
+def _duration_ms_from_item(item: dict[str, Any]) -> int | None:
+    duration = item.get('duration')
+    if isinstance(duration, (int, float)):
+        return int(duration * 1000)
+
+    started_at = item.get('started_at')
+    ended_at = item.get('ended_at')
+    if isinstance(started_at, (int, float)) and isinstance(ended_at, (int, float)):
+        return int((ended_at - started_at) * 1000)
+
+    return None
+
+
+def _count_output_items(output: list[dict[str, Any]], item_type: str) -> int:
+    return sum(1 for item in output if item.get('type') == item_type)
+
+
+def _visible_text_from_output(output: list[dict[str, Any]], fallback: str) -> str:
+    text_parts = [
+        _text_from_parts(item.get('content', []))
+        for item in output
+        if item.get('type') == 'message'
+    ]
+    text = ''.join(text_parts).strip()
+    return text or fallback or ''
+
+
+def _text_from_parts(parts: Any) -> str:
+    if isinstance(parts, str):
+        return parts
+    if not isinstance(parts, list):
+        return ''
+
+    text = []
+    for part in parts:
+        if isinstance(part, str):
+            text.append(part)
+        elif isinstance(part, dict):
+            text.append(part.get('text') or part.get('summary') or '')
+    return ''.join(text).strip()
+
+
+def _extract_tagged_thinking(content: str) -> str:
+    start = content.find('<think>')
+    end = content.find('</think>')
+    if start == -1 or end == -1 or end <= start:
+        return ''
+    return content[start + len('<think>') : end].strip()
+
+
 def start_event_worker(app=None) -> None:
     global _worker_task, _stopping
     _stopping = False

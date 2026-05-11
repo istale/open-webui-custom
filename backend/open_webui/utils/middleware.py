@@ -3389,6 +3389,7 @@ async def outlet_filter_handler(ctx):
 
 
 async def non_streaming_chat_response_handler(response, ctx):
+    response_started_at = time.perf_counter()
     request = ctx['request']
 
     user = ctx['user']
@@ -3464,6 +3465,19 @@ async def non_streaming_chat_response_handler(response, ctx):
                                 'content': [{'type': 'output_text', 'text': content}],
                             }
                         ]
+
+                    try:
+                        from open_webui.utils.data_analysis.event_logger import schedule_chat_lifecycle_events
+
+                        schedule_chat_lifecycle_events(
+                            user_id=user.id,
+                            metadata=metadata,
+                            output=response_output,
+                            content=content,
+                            started_at=response_started_at,
+                        )
+                    except Exception as e:
+                        log.warning('data-analysis lifecycle emit failed: %s', e)
 
                     await event_emitter(
                         {
@@ -3567,6 +3581,8 @@ async def streaming_chat_response_handler(response, ctx):
 
         # Handle as a background task
         async def response_handler(response, events):
+            response_started_at = time.perf_counter()
+
             def tag_output_handler(content_type, tags, output):
                 """
                 Detect special tags (reasoning, solution, code_interpreter) in streaming
@@ -5029,6 +5045,19 @@ async def streaming_chat_response_handler(response, ctx):
                     'title': title,
                     **({'usage': usage} if usage else {}),
                 }
+
+                try:
+                    from open_webui.utils.data_analysis.event_logger import schedule_chat_lifecycle_events
+
+                    schedule_chat_lifecycle_events(
+                        user_id=user.id,
+                        metadata=metadata,
+                        output=output,
+                        content=data['content'],
+                        started_at=response_started_at,
+                    )
+                except Exception as e:
+                    log.warning('data-analysis lifecycle emit failed: %s', e)
 
                 if not ENABLE_REALTIME_CHAT_SAVE:
                     # Save message in the database
