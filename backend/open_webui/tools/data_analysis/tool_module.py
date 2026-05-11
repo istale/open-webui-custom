@@ -15,7 +15,6 @@ from typing import Any
 from uuid import uuid4
 
 from open_webui.utils.data_analysis import get_repository
-from open_webui.utils.data_analysis.chart_renderer import render_matplotlib_chart
 from open_webui.utils.data_analysis.chart_store import ChartRecord, get_chart_store
 from open_webui.utils.data_analysis.query_cache import get_query_cache
 from open_webui.utils.data_analysis.repository import DatasetMeta, QueryResult, RepositoryError
@@ -82,9 +81,15 @@ class Tools:
     """Data analysis vertical workspace tools for manufacturing datasets."""
 
     def __init__(self):
-        self.repo = get_repository()
+        self._repo = None
         self.query_cache = get_query_cache()
         self.chart_store = get_chart_store()
+
+    @property
+    def repo(self):
+        if self._repo is None:
+            self._repo = get_repository()
+        return self._repo
 
     def list_datasets(self, tags: str = '', __user__: dict | None = None) -> dict[str, Any]:
         """List manufacturing datasets the current user can access.
@@ -199,6 +204,8 @@ class Tools:
         entry = self.query_cache.get(query_id, user_id=user_id)
         if entry is None:
             raise ValueError(f'query_id {query_id} expired or not found. Please re-run query_dataset.')
+
+        from open_webui.utils.data_analysis.chart_renderer import render_matplotlib_chart
 
         chart_id = uuid4().hex
         image_path, thumb_path = self.chart_store.paths_for(chart_id)

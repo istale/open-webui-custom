@@ -3,9 +3,11 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 from threading import RLock
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
-import pandas as pd
+if TYPE_CHECKING:
+    import pandas as pd
 
 
 @dataclass(frozen=True)
@@ -13,7 +15,7 @@ class QueryCacheEntry:
     query_id: str
     dataset_id: str
     sql: str
-    df: pd.DataFrame
+    df: 'pd.DataFrame'
     user_id: str
     row_count: int
     created_at: float
@@ -39,7 +41,7 @@ class QueryCache:
         *,
         dataset_id: str,
         sql: str,
-        df: pd.DataFrame,
+        df: 'pd.DataFrame',
         user_id: str,
         row_count: int,
         ttl_s: int = 3600,
