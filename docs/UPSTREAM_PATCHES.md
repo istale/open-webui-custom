@@ -150,7 +150,7 @@ npm test
 - **File**: `backend/open_webui/main.py`
 - **Lines**: +2 lines（router import + `app.include_router(...)`）
 - **Commit prefix**: `[core-touch]`
-- **First introduced**: TBD（CP-4 implementation commit）
+- **First introduced**: 2026-05-11 (`d876d7e6a` — `[core-touch] feat: mount data analysis chart router`)
 - **Why required**:
   FastAPI requires explicit router inclusion in `main.py`. Needed for serving
   dynamically generated chart PNGs from
