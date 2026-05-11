@@ -228,6 +228,44 @@ npm test
   `metadata`, final assistant output, and completion timing → move
   `schedule_chat_lifecycle_events` there and revert this middleware touch.
 
+#### P-009 — Data Analysis Native Chat Prop Hook
+- **Status**: ✅ Active (approved CP-6)
+- **File**: `src/lib/components/chat/Chat.svelte`
+- **Lines**: ~15 lines across prop declarations, tool id merge, metadata persistence, and route replacement
+- **Commit prefix**: `[core-touch]`
+- **First introduced**: TBD（CP-6 implementation commit）
+- **Why required**:
+  Native `<Chat>` only exposes `chatIdProp`; the data-analysis workspace must
+  inject `builtin:data-analysis` as a hidden tool id and persist
+  `metadata.workspace_type = 'data-analysis'` while still reusing the native
+  chat lifecycle and streaming code.
+- **Plan tier**: Plan C（tiny prop hook; all vertical UI remains in `src/lib/components/data-analysis/`）
+- **Approval**: 2026-05-12 by user / Tech Lead
+- **Owner**: vertical/data-analysis frontend
+- **Related spec**: [`frontend-spec.md`](./spec/frontend-spec.md)
+- **Removal condition**:
+  Upstream adds supported props or context for route-scoped tool ids, chat
+  metadata, and post-create route replacement → move the vertical route to
+  that public API and revert this hook.
+
+#### P-010 — Data Analysis Sidebar Entry Hook
+- **Status**: ✅ Active (approved CP-6)
+- **File**: `src/lib/components/layout/Sidebar.svelte`, `src/lib/components/layout/Sidebar/ChatItem.svelte`
+- **Lines**: ~20 lines
+- **Commit prefix**: `[core-touch]`
+- **First introduced**: TBD（CP-6 implementation commit）
+- **Why required**:
+  Current Open WebUI has no dynamic workspace registry. The vertical needs a
+  sidebar entry for `/workspace/data-analysis`, and existing chat rows link to
+  `/c/{id}` unless they inspect the persisted `workspace_type` metadata.
+- **Plan tier**: Plan C（tiny hard-coded menu entry + route-aware chat row）
+- **Approval**: 2026-05-12 by user / Tech Lead
+- **Owner**: vertical/data-analysis frontend
+- **Related spec**: [`frontend-spec.md`](./spec/frontend-spec.md)
+- **Removal condition**:
+  Upstream adds a sidebar workspace extension registry and route-aware chat
+  item hook → register the data-analysis entry there and revert this patch.
+
 ---
 
 ## Removed Patches（歷史紀錄）

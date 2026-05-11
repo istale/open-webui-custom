@@ -112,6 +112,13 @@
 		}
 	};
 
+	const getChatHref = async () => {
+		await loadChat();
+		return chat?.chat?.metadata?.workspace_type === 'data-analysis'
+			? `/workspace/data-analysis/${id}`
+			: `/c/${id}`;
+	};
+
 	let showShareChatModal = false;
 	let confirmEdit = false;
 
@@ -454,7 +461,8 @@
 					? 'bg-gray-100 dark:bg-gray-950 selected'
 					: ' group-hover:bg-gray-100 dark:group-hover:bg-gray-950'}  whitespace-nowrap text-ellipsis"
 			href="/c/{id}"
-			on:click={() => {
+			on:click={async (e) => {
+				e.preventDefault();
 				dispatch('select');
 
 				if ($selectedFolder) {
@@ -468,6 +476,7 @@
 				// Optimistically mark as read in UI when clicked
 				unread = false;
 				lastReadAt = Date.now() / 1000;
+				goto(await getChatHref());
 			}}
 			on:dblclick={async (e) => {
 				e.preventDefault();

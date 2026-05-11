@@ -113,6 +113,9 @@
 	import { getBanners } from '$lib/apis/configs';
 
 	export let chatIdProp = '';
+	export let extraToolIds: string[] = [];
+	export let extraMetadata: Record<string, any> = {};
+	export let chatRoutePrefix = '/c';
 
 	let loading = true;
 
@@ -2358,6 +2361,11 @@
 				toolIds.push(toolId);
 			}
 		}
+		for (const toolId of extraToolIds) {
+			if (!toolIds.includes(toolId)) {
+				toolIds.push(toolId);
+			}
+		}
 
 		// Parse skill mentions (<$skillId|label>) from user messages
 		const skillMentionRegex = /<\$([^|>]+)\|?[^>]*>/g;
@@ -2511,7 +2519,7 @@
 				if (res.chat_id && $chatId !== res.chat_id && $chatId === _chatId) {
 					await chatId.set(res.chat_id);
 					if (!$temporaryChatEnabled) {
-						window.history.replaceState(history.state, '', `/c/${res.chat_id}`);
+						window.history.replaceState(history.state, '', `${chatRoutePrefix}/${res.chat_id}`);
 						currentChatPage.set(1);
 						await chats.set(await getChatList(localStorage.token, $currentChatPage));
 
@@ -2521,8 +2529,11 @@
 						// by the backend at chat creation time.
 						if (Object.keys(params).length > 0) {
 							await updateChatById(localStorage.token, res.chat_id, {
-								params: params
+								params: params,
+								...(Object.keys(extraMetadata).length > 0 ? { metadata: extraMetadata } : {})
 							});
+						} else if (Object.keys(extraMetadata).length > 0) {
+							await updateChatById(localStorage.token, res.chat_id, { metadata: extraMetadata });
 						}
 					}
 				}
@@ -2779,6 +2790,7 @@
 					params: params,
 					history: history,
 					messages: createMessagesList(history, history.currentId),
+					...(Object.keys(extraMetadata).length > 0 ? { metadata: extraMetadata } : {}),
 					tags: [],
 					timestamp: Date.now()
 				},
@@ -2788,7 +2800,7 @@
 			_chatId = chat.id;
 			await chatId.set(_chatId);
 
-			window.history.replaceState(history.state, '', `/c/${_chatId}`);
+			window.history.replaceState(history.state, '', `${chatRoutePrefix}/${_chatId}`);
 
 			await tick();
 
@@ -2813,7 +2825,8 @@
 					history: history,
 					messages: createMessagesList(history, history.currentId),
 					params: params,
-					files: chatFiles
+					files: chatFiles,
+					...(Object.keys(extraMetadata).length > 0 ? { metadata: extraMetadata } : {})
 				});
 			}
 		}

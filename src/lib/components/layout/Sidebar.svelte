@@ -76,7 +76,7 @@
 	import HotkeyHint from '../common/HotkeyHint.svelte';
 
 	const BREAKPOINT = 768;
-	const DEFAULT_PINNED_ITEMS = ['notes', 'workspace'];
+	const DEFAULT_PINNED_ITEMS = ['data-analysis', 'notes', 'workspace'];
 
 	let scrollTop = 0;
 
@@ -104,10 +104,12 @@
 
 	let newFolderId = null;
 
-	$: pinnedItems = $settings?.pinnedMenuItems ?? DEFAULT_PINNED_ITEMS;
+	$: pinnedItems = Array.from(new Set(['data-analysis', ...($settings?.pinnedMenuItems ?? DEFAULT_PINNED_ITEMS)]));
 
 	const isMenuItemVisible = (id) => {
 		switch (id) {
+			case 'data-analysis':
+				return true;
 			case 'notes':
 				return (
 					($config?.features?.enable_notes ?? false) &&
@@ -140,6 +142,7 @@
 
 	const getMenuItemMeta = (id) => {
 		const items = {
+			'data-analysis': { label: 'Data Analysis', href: '/workspace/data-analysis', iconType: 'data-analysis' },
 			notes: { label: 'Notes', href: '/notes', iconType: 'note' },
 			workspace: { label: 'Workspace', href: '/workspace', iconType: 'workspace' },
 			automations: { label: 'Automations', href: '/automations', iconType: 'automations' },
@@ -874,7 +877,9 @@
 									aria-label={$i18n.t(meta.label)}
 								>
 									<div class=" self-center flex items-center justify-center size-9">
-										{#if itemId === 'notes'}
+										{#if itemId === 'data-analysis'}
+											<Code className="size-4.5" />
+										{:else if itemId === 'notes'}
 											<Note className="size-4.5" />
 										{:else if itemId === 'workspace'}
 											<svg
@@ -1121,7 +1126,9 @@
 										aria-label={$i18n.t(meta.label)}
 									>
 										<div class="self-center">
-											{#if itemId === 'notes'}
+											{#if itemId === 'data-analysis'}
+												<Code className="size-4.5" strokeWidth="2" />
+											{:else if itemId === 'notes'}
 												<Note className="size-4.5" strokeWidth="2" />
 											{:else if itemId === 'workspace'}
 												<svg
