@@ -116,6 +116,9 @@
 	export let extraToolIds: string[] = [];
 	export let extraMetadata: Record<string, any> = {};
 	export let chatRoutePrefix = '/c';
+	export let onHistoryChange = (_history: any) => {};
+	export let onPromptSubmit = (_prompt: string, _chatId: string) => {};
+	export let onStreamAbort = (_chatId: string) => {};
 
 	let loading = true;
 
@@ -174,6 +177,7 @@
 		messages: {},
 		currentId: null
 	};
+	$: onHistoryChange(history);
 
 	let taskIds = null;
 
@@ -1957,6 +1961,7 @@
 
 	const submitHandler = async (userPrompt, { _raw = false } = {}) => {
 		console.log('submitHandler', userPrompt, $chatId);
+		onPromptSubmit(userPrompt, $chatId);
 
 		const _selectedModels = selectedModels.map((modelId) =>
 			$models.map((m) => m.id).includes(modelId) ? modelId : ''
@@ -2588,6 +2593,7 @@
 
 	const stopResponse = async (processQueue = true) => {
 		if (taskIds) {
+			onStreamAbort($chatId);
 			if ($chatId) {
 				await stopTasksByChatId(localStorage.token, $chatId).catch((error) => {
 					toast.error(`${error}`);
