@@ -231,9 +231,9 @@ npm test
 #### P-009 — Data Analysis Native Chat Prop Hook
 - **Status**: ✅ Active (approved CP-6)
 - **File**: `src/lib/components/chat/Chat.svelte`
-- **Lines**: ~15 lines across prop declarations, tool id merge, metadata persistence, and route replacement
+- **Lines**: ~18 lines across prop declarations, tool id merge, metadata persistence, callbacks, and route replacement
 - **Commit prefix**: `[core-touch]`
-- **First introduced**: `301e5c3f2`, callback extension `a89c20ba2`
+- **First introduced**: `301e5c3f2`, callback extension `a89c20ba2`, callback collision fix `bcdadcf3d`
 - **Why required**:
   Native `<Chat>` only exposes `chatIdProp`; the data-analysis workspace must
   inject `builtin:data-analysis` as a hidden tool id and persist
