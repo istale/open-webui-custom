@@ -140,7 +140,7 @@
 				extraToolIds={['builtin:data-analysis']}
 				{extraMetadata}
 				chatRoutePrefix="/workspace/data-analysis"
-				onHistoryChange={(history) => (historySnapshot = history)}
+					onVerticalHistoryChange={(history) => (historySnapshot = history)}
 				onPromptSubmit={(prompt) =>
 					logDataAnalysisEvent({
 						event_type: 'prompt.submitted',

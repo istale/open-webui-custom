@@ -116,7 +116,7 @@
 	export let extraToolIds: string[] = [];
 	export let extraMetadata: Record<string, any> = {};
 	export let chatRoutePrefix = '/c';
-	export let onHistoryChange = (_history: any) => {};
+	export let onVerticalHistoryChange = (_history: any) => {};
 	export let onPromptSubmit = (_prompt: string, _chatId: string) => {};
 	export let onStreamAbort = (_chatId: string) => {};
 
@@ -177,7 +177,10 @@
 		messages: {},
 		currentId: null
 	};
-	$: onHistoryChange(history);
+	$: {
+		onHistoryChange(history);
+		onVerticalHistoryChange(history);
+	}
 
 	let taskIds = null;
 
