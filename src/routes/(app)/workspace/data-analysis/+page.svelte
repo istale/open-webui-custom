@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { getContext, onMount } from 'svelte';
+	import type { Writable } from 'svelte/store';
 	import Chat from '$lib/components/chat/Chat.svelte';
 	import CanvasFeed from '$lib/components/data-analysis/CanvasFeed.svelte';
 	import DataAnalysisLayout from '$lib/components/data-analysis/DataAnalysisLayout.svelte';
@@ -7,11 +8,19 @@
 	import { getDataAnalysisDatasets, logDataAnalysisEvent } from '$lib/apis/data-analysis';
 	import { datasets, datasetsState, selectedDatasetId } from '$lib/stores/data-analysis';
 
-	const i18n = getContext('i18n');
+	const i18n =
+		getContext<Writable<{ t: (key: string, options?: Record<string, unknown>) => string }>>('i18n');
 	let chatId = '';
 	let activeDatasetId = '';
 	let activeFilters: string[] = [];
-	let historySnapshot = { messages: {}, currentId: null };
+	type HistorySnapshot = {
+		messages: Record<string, any>;
+		currentId: string | null;
+	};
+
+	type DatasetSelectedEvent = CustomEvent<{ datasetId: string; from?: string }>;
+
+	let historySnapshot: HistorySnapshot = { messages: {}, currentId: null };
 	let loggedCharts = new Set<string>();
 
 	$: messages = Object.values(historySnapshot.messages ?? {});
@@ -37,14 +46,18 @@
 		}
 	};
 
-	const selectDataset = (event) => {
+	const selectDataset = (event: DatasetSelectedEvent) => {
 		const previous = activeDatasetId;
 		activeDatasetId = event.detail.datasetId;
 		selectedDatasetId.set(activeDatasetId);
 		logDataAnalysisEvent({
 			event_type: 'dataset.selected',
 			dataset_id: activeDatasetId,
-			payload: { dataset_id: activeDatasetId, prev_dataset_id: previous || null, from: event.detail.from }
+			payload: {
+				dataset_id: activeDatasetId,
+				prev_dataset_id: previous || null,
+				from: event.detail.from
+			}
 		});
 	};
 
@@ -64,7 +77,10 @@
 		loading={$datasetsState.loading}
 		error={$datasetsState.error}
 		on:select-dataset={selectDataset}
-		on:toggle-group-filter={(e) => (activeFilters = activeFilters.includes(e.detail.tag) ? activeFilters.filter((tag) => tag !== e.detail.tag) : [...activeFilters, e.detail.tag])}
+		on:toggle-group-filter={(e) =>
+			(activeFilters = activeFilters.includes(e.detail.tag)
+				? activeFilters.filter((tag) => tag !== e.detail.tag)
+				: [...activeFilters, e.detail.tag])}
 		on:reset-filters={() => (activeFilters = [])}
 		on:refresh-datasets={loadDatasets}
 	/>
@@ -78,7 +94,11 @@
 			logDataAnalysisEvent({
 				event_type: 'chart.rendered',
 				chart_type: e.detail.chartType,
-				payload: { chart_id: e.detail.chartId, chart_type: e.detail.chartType, displayed_in: 'canvas-card' }
+				payload: {
+					chart_id: e.detail.chartId,
+					chart_type: e.detail.chartType,
+					displayed_in: 'canvas-card'
+				}
 			});
 		}}
 	/>

@@ -109,7 +109,7 @@ async def log_event(*,
 - Queue 滿（10k）→ `log.warning` + drop newest
 
 ```ts
-// src/lib/apis/data-analysis/events.ts
+// src/lib/apis/data-analysis/index.ts
 
 export async function logEvent(payload: {
     event_type: string;

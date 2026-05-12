@@ -6,7 +6,7 @@
 </script>
 
 <span class="icon {size}" style:--icon-color={color} aria-hidden="true">
-	<span />
+	<span></span>
 </span>
 
 <style>

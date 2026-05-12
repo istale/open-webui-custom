@@ -132,18 +132,18 @@ npm test
   - Upstream 加 `Chat.svelte` 接受 props 之一 → revert + use native
   - Vertical 改用獨立 `<Chat>` (fork-and-replace) → revert this hook（但成本更高，不推薦）
 
-### Pending — deferred decisions
+### Previously Deferred Decisions
 
 #### P-004 — Chart Placeholder Render Path
-- **Status**: ⏳ DEFERRED to CP-3 (First Tool E2E)
+- **Status**: ✅ Resolved in CP-6 as FE-D (no core touch)
 - **Decision rationale**:
-  CP-1 inventory 提議 FE-C（CSS hide + DOM inject）。Reviewer 觀察 FE-D（tool 不放 file，靠文字 placeholder + canvas 獨立 fetch）可能更乾淨，但需 CP-3 看 native ToolCallDisplay 實際渲染才能定。
-- **Options to evaluate at CP-3**:
-  - **FE-D**: tool return 不含 `function_call_output.files`，native 顯示 JSON-like text；vertical CSS scope style 該 text 為 placeholder + click handler
-  - **FE-B**: 小 [core-touch] in `ToolCallDisplay.svelte` 加 Svelte context / event dispatch
-  - **FE-C**: CSS hide + DOM mutation observer inject (brittle, last resort)
-- **CP-2 影響**：無（adapter 不依賴此決定）
-- **Will be promoted at CP-3 review**
+  CP-1 inventory 提議 FE-C（CSS hide + DOM inject）。CP-4 implementation confirmed `render_chart`
+  can return a schema-versioned text payload with chart URLs and no `function_call_output.files`.
+  CP-6 therefore derives canvas cards from native `message.output[]` and avoids touching
+  `ToolCallDisplay.svelte`.
+- **Removal condition**:
+  If upstream later adds a first-class tool-result render registry, replace the FE-D parser in
+  `CanvasFeed.svelte` with that native hook.
 
 #### P-005 — Data Analysis Chart Image Router Include
 - **Status**: ✅ Active (approved CP-4)

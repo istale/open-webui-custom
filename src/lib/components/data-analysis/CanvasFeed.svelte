@@ -1,21 +1,54 @@
 <script lang="ts">
 	import { afterUpdate, createEventDispatcher, getContext, onMount } from 'svelte';
+	import type { Writable } from 'svelte/store';
 	import ChartCardCanvas from './ChartCardCanvas.svelte';
 	import { isNearBottom, scrollToBottom } from './scroll-utils';
 	import { workspaceEvents } from '$lib/stores/data-analysis';
 
-	export let messages = [];
+	type OutputPart = {
+		text?: string;
+	};
+
+	type ToolOutput = {
+		type?: string;
+		call_id?: string;
+		name?: string;
+		arguments?: string | Record<string, unknown>;
+		output?: OutputPart[];
+	};
+
+	type ChatMessage = {
+		id?: string;
+		output?: ToolOutput[];
+	};
+
+	type ChartCard = {
+		chartId: string;
+		url: string;
+		messageId: string;
+		title: string;
+		chartType: string;
+		datasetId: string;
+		fields: string;
+		method: string;
+		notes: string;
+	};
+
+	export let messages: ChatMessage[] = [];
 	export let isStreaming = false;
 
-	const i18n = getContext('i18n');
-	const dispatch = createEventDispatcher();
+	const i18n =
+		getContext<Writable<{ t: (key: string, options?: Record<string, unknown>) => string }>>('i18n');
+	const dispatch = createEventDispatcher<{ 'chart-rendered': ChartCard }>();
 	let scroller: HTMLDivElement;
 	let showJump = false;
 	let highlighted = '';
 	let previousCount = 0;
 
-	const parseMaybeJson = (value) => {
-		if (typeof value !== 'string') return value;
+	const parseMaybeJson = (value: unknown): Record<string, any> | null => {
+		if (typeof value !== 'string') {
+			return value && typeof value === 'object' ? (value as Record<string, any>) : null;
+		}
 		try {
 			return JSON.parse(value);
 		} catch {
@@ -27,14 +60,19 @@
 		}
 	};
 
-	const textFromOutput = (item) =>
-		(item?.output ?? []).map((part) => part.text ?? '').join('');
+	const textFromOutput = (item?: ToolOutput) =>
+		(item?.output ?? []).map((part: OutputPart) => part.text ?? '').join('');
 
-	const chartFromPair = (call, result, messageId) => {
+	const chartFromPair = (
+		call: ToolOutput,
+		result: ToolOutput | undefined,
+		messageId = ''
+	): ChartCard | null => {
 		if (call?.name !== 'render_chart') return null;
 		const args = parseMaybeJson(call.arguments) ?? {};
 		const text = textFromOutput(result);
-		const chartId = text.match(/'chart_id': '([^']+)'/)?.[1] ?? text.match(/"chart_id": "([^"]+)"/)?.[1];
+		const chartId =
+			text.match(/'chart_id': '([^']+)'/)?.[1] ?? text.match(/"chart_id": "([^"]+)"/)?.[1];
 		const url = text.match(/'url': '([^']+)'/)?.[1] ?? text.match(/"url": "([^"]+)"/)?.[1];
 		if (!chartId || !url) return null;
 		return {
@@ -50,13 +88,17 @@
 		};
 	};
 
-	$: cards = messages.flatMap((message) => {
+	$: cards = messages.flatMap((message: ChatMessage) => {
 		const output = message.output ?? [];
-		const results = new Map(output.filter((item) => item.type === 'function_call_output').map((item) => [item.call_id, item]));
+		const results = new Map(
+			output
+				.filter((item: ToolOutput) => item.type === 'function_call_output' && item.call_id)
+				.map((item: ToolOutput) => [item.call_id, item])
+		);
 		return output
-			.filter((item) => item.type === 'function_call')
-			.map((call) => chartFromPair(call, results.get(call.call_id), message.id))
-			.filter(Boolean);
+			.filter((item: ToolOutput) => item.type === 'function_call')
+			.map((call: ToolOutput) => chartFromPair(call, results.get(call.call_id), message.id))
+			.filter((card: ChartCard | null): card is ChartCard => Boolean(card));
 	});
 
 	onMount(() => {
@@ -102,7 +144,14 @@
 	</div>
 
 	{#if showJump}
-		<button class="jump" type="button" on:click={() => { scrollToBottom(scroller); showJump = false; }}>
+		<button
+			class="jump"
+			type="button"
+			on:click={() => {
+				scrollToBottom(scroller);
+				showJump = false;
+			}}
+		>
 			{$i18n.t('New charts')}
 		</button>
 	{/if}

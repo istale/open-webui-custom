@@ -507,7 +507,7 @@ async def forward_chat_stream(upstream, chat_id, user_id, message_id):
 前端透過 vertical 的 events API 上傳：
 
 ```ts
-// src/lib/apis/data-analysis/events.ts
+// src/lib/apis/data-analysis/index.ts
 
 export async function logEvent(payload: {
     event_type: string;
@@ -742,7 +742,7 @@ ORDER BY ctr DESC;
 
 ### Step 5 — Frontend events endpoint + client（0.5d）
 1. `POST /api/v1/data-analysis/events`（per §5.3）
-2. `src/lib/apis/data-analysis/events.ts` client
+2. `src/lib/apis/data-analysis/index.ts` client
 3. Frontend 5 處 call point：
    - `+layout.svelte` mount → `workspace.opened`
    - prompt 送出 → `prompt.submitted`

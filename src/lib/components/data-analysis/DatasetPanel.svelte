@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { createEventDispatcher, getContext } from 'svelte';
+	import type { Writable } from 'svelte/store';
 	import DatasetRow from './DatasetRow.svelte';
 	import type { DatasetMeta } from '$lib/stores/data-analysis';
 
@@ -10,14 +11,17 @@
 	export let loading = false;
 	export let error: string | null = null;
 
-	const i18n = getContext('i18n');
+	const i18n =
+		getContext<Writable<{ t: (key: string, options?: Record<string, unknown>) => string }>>('i18n');
 	const dispatch = createEventDispatcher();
 
 	$: tags = Array.from(new Set(datasets.flatMap((dataset) => dataset.tags ?? []))).sort();
 	$: filtered =
 		activeGroupFilters.length === 0
 			? datasets
-			: datasets.filter((dataset) => activeGroupFilters.every((tag) => dataset.tags?.includes(tag)));
+			: datasets.filter((dataset) =>
+					activeGroupFilters.every((tag) => dataset.tags?.includes(tag))
+				);
 
 	const toggleTag = (tag: string) => dispatch('toggle-group-filter', { tag });
 </script>
@@ -28,7 +32,11 @@
 			<h2>{$i18n.t('Data Analysis')}</h2>
 			<p>{$i18n.t('Manufacturing datasets')}</p>
 		</div>
-		<button type="button" on:click={() => dispatch('refresh-datasets')} aria-label={$i18n.t('Refresh')}>
+		<button
+			type="button"
+			on:click={() => dispatch('refresh-datasets')}
+			aria-label={$i18n.t('Refresh')}
+		>
 			↻
 		</button>
 	</header>

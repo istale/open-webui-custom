@@ -1,12 +1,14 @@
 <script lang="ts">
 	import { getContext } from 'svelte';
+	import type { Writable } from 'svelte/store';
 	import { workspaceEvents } from '$lib/stores/data-analysis';
 
 	export let attachmentId: string;
 	export let title: string;
 	export let chartType: string;
 
-	const i18n = getContext('i18n');
+	const i18n =
+		getContext<Writable<{ t: (key: string, options?: Record<string, unknown>) => string }>>('i18n');
 </script>
 
 <button

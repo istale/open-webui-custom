@@ -99,7 +99,7 @@
   - `models/data_analysis_events.py` + `bulk_insert` + `mark_deleted`
   - `utils/data_analysis/event_logger.py` + 背景 worker
   - `main.py` startup/shutdown hook（仍是同一個 `[core-touch]`，加 worker lifecycle）
-  - Frontend `events.ts` client + 5 處 emit
+  - Frontend data-analysis API client + 5 處 emit
   - Backend tool functions 整合 emit
   - 13 個 P0 events 各至少 1 筆 fixture
 - **Review focus**：

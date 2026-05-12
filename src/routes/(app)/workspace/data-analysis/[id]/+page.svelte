@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { getContext, onMount } from 'svelte';
+	import type { Writable } from 'svelte/store';
 	import { page } from '$app/stores';
 	import Chat from '$lib/components/chat/Chat.svelte';
 	import CanvasFeed from '$lib/components/data-analysis/CanvasFeed.svelte';
@@ -9,13 +10,21 @@
 	import { getDataAnalysisDatasets, logDataAnalysisEvent } from '$lib/apis/data-analysis';
 	import { datasets, datasetsState, selectedDatasetId } from '$lib/stores/data-analysis';
 
-	const i18n = getContext('i18n');
+	const i18n =
+		getContext<Writable<{ t: (key: string, options?: Record<string, unknown>) => string }>>('i18n');
 	let chatId = '';
-	$: chatId = $page.params.id;
+	$: chatId = $page.params.id ?? '';
 
 	let activeDatasetId = '';
 	let activeFilters: string[] = [];
-	let historySnapshot = { messages: {}, currentId: null };
+	type HistorySnapshot = {
+		messages: Record<string, any>;
+		currentId: string | null;
+	};
+
+	type DatasetSelectedEvent = CustomEvent<{ datasetId: string; from?: string }>;
+
+	let historySnapshot: HistorySnapshot = { messages: {}, currentId: null };
 	let loggedCharts = new Set<string>();
 
 	$: messages = Object.values(historySnapshot.messages ?? {});
@@ -52,10 +61,13 @@
 		if (!chatId) return;
 		const chat = await getChatById(localStorage.token, chatId).catch(() => null);
 		if (!chat) return;
-		await updateChatById(localStorage.token, chatId, { ...(chat.chat ?? {}), metadata: extraMetadata });
+		await updateChatById(localStorage.token, chatId, {
+			...(chat.chat ?? {}),
+			metadata: extraMetadata
+		});
 	};
 
-	const selectDataset = async (event) => {
+	const selectDataset = async (event: DatasetSelectedEvent) => {
 		const previous = activeDatasetId;
 		activeDatasetId = event.detail.datasetId;
 		selectedDatasetId.set(activeDatasetId);
@@ -64,12 +76,20 @@
 			event_type: 'dataset.selected',
 			chat_id: chatId,
 			dataset_id: activeDatasetId,
-			payload: { dataset_id: activeDatasetId, prev_dataset_id: previous || null, from: event.detail.from }
+			payload: {
+				dataset_id: activeDatasetId,
+				prev_dataset_id: previous || null,
+				from: event.detail.from
+			}
 		});
 	};
 
 	onMount(async () => {
-		logDataAnalysisEvent({ event_type: 'workspace.opened', chat_id: chatId, payload: { entry_path: 'sidebar-history' } });
+		logDataAnalysisEvent({
+			event_type: 'workspace.opened',
+			chat_id: chatId,
+			payload: { entry_path: 'sidebar-history' }
+		});
 		await loadChatMetadata();
 		await loadDatasets();
 	});
@@ -85,7 +105,10 @@
 		loading={$datasetsState.loading}
 		error={$datasetsState.error}
 		on:select-dataset={selectDataset}
-		on:toggle-group-filter={(e) => (activeFilters = activeFilters.includes(e.detail.tag) ? activeFilters.filter((tag) => tag !== e.detail.tag) : [...activeFilters, e.detail.tag])}
+		on:toggle-group-filter={(e) =>
+			(activeFilters = activeFilters.includes(e.detail.tag)
+				? activeFilters.filter((tag) => tag !== e.detail.tag)
+				: [...activeFilters, e.detail.tag])}
 		on:reset-filters={() => (activeFilters = [])}
 		on:refresh-datasets={loadDatasets}
 	/>
@@ -101,7 +124,11 @@
 				chat_id: chatId,
 				message_id: e.detail.messageId,
 				chart_type: e.detail.chartType,
-				payload: { chart_id: e.detail.chartId, chart_type: e.detail.chartType, displayed_in: 'canvas-card' }
+				payload: {
+					chart_id: e.detail.chartId,
+					chart_type: e.detail.chartType,
+					displayed_in: 'canvas-card'
+				}
 			});
 		}}
 	/>

@@ -32,7 +32,7 @@
 	aria-label={`${side} panel resize handle`}
 	on:mousedown={start}
 >
-	<span />
+	<span></span>
 </button>
 
 <style>

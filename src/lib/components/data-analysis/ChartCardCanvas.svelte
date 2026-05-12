@@ -1,10 +1,12 @@
 <script lang="ts">
 	import { getContext } from 'svelte';
+	import type { Writable } from 'svelte/store';
 
 	export let card;
 	export let highlighted = false;
 
-	const i18n = getContext('i18n');
+	const i18n =
+		getContext<Writable<{ t: (key: string, options?: Record<string, unknown>) => string }>>('i18n');
 	let imageFailed = false;
 </script>
 
