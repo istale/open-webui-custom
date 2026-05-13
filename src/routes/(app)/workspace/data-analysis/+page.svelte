@@ -7,6 +7,7 @@
 	import DatasetPanel from '$lib/components/data-analysis/DatasetPanel.svelte';
 	import { getDataAnalysisDatasets, logDataAnalysisEvent } from '$lib/apis/data-analysis';
 	import { datasets, datasetsState, selectedDatasetId } from '$lib/stores/data-analysis';
+	import { createMessagesList } from '$lib/utils';
 
 	const i18n =
 		getContext<Writable<{ t: (key: string, options?: Record<string, unknown>) => string }>>('i18n');
@@ -23,7 +24,9 @@
 	let historySnapshot: HistorySnapshot = { messages: {}, currentId: null };
 	let loggedCharts = new Set<string>();
 
-	$: messages = Object.values(historySnapshot.messages ?? {});
+	$: messages = historySnapshot.currentId
+		? createMessagesList(historySnapshot, historySnapshot.currentId)
+		: [];
 	$: visibleDatasets = $datasets ?? [];
 	$: extraMetadata = {
 		workspace_type: 'data-analysis',

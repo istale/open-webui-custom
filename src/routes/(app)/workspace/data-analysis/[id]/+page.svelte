@@ -9,6 +9,7 @@
 	import { getChatById, updateChatById } from '$lib/apis/chats';
 	import { getDataAnalysisDatasets, logDataAnalysisEvent } from '$lib/apis/data-analysis';
 	import { datasets, datasetsState, selectedDatasetId } from '$lib/stores/data-analysis';
+	import { createMessagesList } from '$lib/utils';
 
 	const i18n =
 		getContext<Writable<{ t: (key: string, options?: Record<string, unknown>) => string }>>('i18n');
@@ -27,7 +28,9 @@
 	let historySnapshot: HistorySnapshot = { messages: {}, currentId: null };
 	let loggedCharts = new Set<string>();
 
-	$: messages = Object.values(historySnapshot.messages ?? {});
+	$: messages = historySnapshot.currentId
+		? createMessagesList(historySnapshot, historySnapshot.currentId)
+		: [];
 	$: visibleDatasets = $datasets ?? [];
 	$: extraMetadata = {
 		workspace_type: 'data-analysis',
@@ -140,7 +143,7 @@
 				extraToolIds={['builtin:data-analysis']}
 				{extraMetadata}
 				chatRoutePrefix="/workspace/data-analysis"
-					onVerticalHistoryChange={(history) => (historySnapshot = history)}
+				onVerticalHistoryChange={(history) => (historySnapshot = history)}
 				onPromptSubmit={(prompt) =>
 					logDataAnalysisEvent({
 						event_type: 'prompt.submitted',
