@@ -1,0 +1,40 @@
+
+/Users/istale/Documents/open-webui-based-project/src/routes/s/[id]/+page.svelte:183:9
+Error: Variable 'user' implicitly has an 'any' type. (ts)
+							className="h-full flex pt-4 pb-8 "
+							{user}
+							chatId={$chatId}
+
+/Users/istale/Documents/open-webui-based-project/src/routes/s/[id]/+page.svelte:187:9
+Error: Object literal may only specify known properties, and 'processing' does not exist in type '{ className?: string | undefined; chatId?: string | undefined; user?: SessionUser | undefined; prompt: any; history?: {} | undefined; selectedModels: any; atSelectedModel: any; ... 16 more ...; scrollToTop?: (() => Promise<...>) | undefined; }'. (ts)
+							{selectedModels}
+							{processing}
+							bind:history
+
+/Users/istale/Documents/open-webui-based-project/src/routes/s/[id]/+page.svelte:189:13
+Error: Variable 'messages' implicitly has an 'any[]' type. (ts)
+							bind:history
+							bind:messages
+							bind:autoScroll
+
+/Users/istale/Documents/open-webui-based-project/src/routes/s/[id]/+page.svelte:208:8
+Error: Cannot use 'i18n' as a store. 'i18n' needs to be an object with a subscribe method on it.
+
+No overload matches this call.
+  Overload 1 of 2, '(store: SvelteStore<any>): any', gave the following error.
+    Argument of type 'unknown' is not assignable to parameter of type 'SvelteStore<any>'.
+  Overload 2 of 2, '(store: SvelteStore<any> | null | undefined): any', gave the following error.
+    Argument of type 'unknown' is not assignable to parameter of type 'SvelteStore<any> | null | undefined'. (ts)
+					>
+						{$i18n.t('Clone Chat')}
+					</button>
+
+/Users/istale/Documents/open-webui-based-project/src/routes/watch/+page.svelte:16:41
+Error: Argument of type 'string | null' is not assignable to parameter of type 'string | number | boolean'.
+  Type 'null' is not assignable to type 'string | number | boolean'. (js)
+
+			goto(`/?youtube=${encodeURIComponent(videoId)}`);
+		} else {
+
+====================================
+svelte-check found 9435 errors and 272 warnings in 379 files

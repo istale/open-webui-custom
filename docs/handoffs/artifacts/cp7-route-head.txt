@@ -1,0 +1,10 @@
+HTTP/1.1 200 OK
+Access-Control-Allow-Origin: *
+content-length: 7218
+content-type: text/html
+etag: "1ya6tii"
+x-sveltekit-page: true
+Date: Wed, 13 May 2026 15:18:59 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
