@@ -63,6 +63,11 @@
 	const textFromOutput = (item?: ToolOutput) =>
 		(item?.output ?? []).map((part: OutputPart) => part.text ?? '').join('');
 
+	const csvOrList = (value: unknown) => {
+		if (Array.isArray(value)) return value.join(', ');
+		return typeof value === 'string' ? value : '';
+	};
+
 	const chartFromPair = (
 		call: ToolOutput,
 		result: ToolOutput | undefined,
@@ -71,20 +76,29 @@
 		if (call?.name !== 'render_chart') return null;
 		const args = parseMaybeJson(call.arguments) ?? {};
 		const text = textFromOutput(result);
+		const payload = parseMaybeJson(text);
+		const attachment = payload?.attachment ?? {};
+		const explanation = attachment?.metadata?.explanation ?? {};
+		const fallbackFields = `${args.x ?? ''}${args.y ? `, ${args.y}` : ''}`;
+		const explainedFields = csvOrList(explanation.fields);
+		const fields = args.explanation_fields ?? explainedFields;
 		const chartId =
-			text.match(/'chart_id': '([^']+)'/)?.[1] ?? text.match(/"chart_id": "([^"]+)"/)?.[1];
-		const url = text.match(/'url': '([^']+)'/)?.[1] ?? text.match(/"url": "([^"]+)"/)?.[1];
+			attachment.id ??
+			text.match(/'chart_id': '([^']+)'/)?.[1] ??
+			text.match(/"chart_id": "([^"]+)"/)?.[1];
+		const url =
+			attachment.url ?? text.match(/'url': '([^']+)'/)?.[1] ?? text.match(/"url": "([^"]+)"/)?.[1];
 		if (!chartId || !url) return null;
 		return {
 			chartId,
 			url,
 			messageId,
-			title: args.title ?? 'Rendered chart',
-			chartType: args.chart_type ?? 'chart',
-			datasetId: args.dataset_context ?? '',
-			fields: args.fields_used ?? `${args.x ?? ''}${args.y ? `, ${args.y}` : ''}`,
-			method: args.transformation_summary ?? '',
-			notes: args.explanation_notes ?? ''
+			title: args.title ?? attachment?.metadata?.title ?? 'Rendered chart',
+			chartType: args.chart_type ?? attachment?.metadata?.chart_type ?? 'chart',
+			datasetId: args.query_id ?? explanation.source ?? '',
+			fields: fields || fallbackFields,
+			method: args.explanation_method ?? explanation.method ?? '',
+			notes: args.explanation_notes ?? explanation.notes ?? ''
 		};
 	};
 
