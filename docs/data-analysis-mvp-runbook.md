@@ -100,6 +100,6 @@ The generated chart artifact is:
 
 ## Known MVP Limits
 
-- Chart metadata is still in-process. Horizontal production deployment needs DB-backed chart metadata and S3/GCS-style object storage.
+- Chart metadata is now durable across restarts and multi-worker deployments via a JSON sidecar (`{chart_id}.json`) written next to each PNG under the shared `DATA_DIR` (post-MVP fix, 2026-05-22). The remaining gap is object storage: PNGs + sidecars still live on local disk, so a fully ephemeral / horizontally-sharded deployment without shared storage would need S3/GCS-style object storage. DB-backed metadata is optional and only worth it if you outgrow filesystem lookup.
 - Full repo-wide `npm run check` fails on existing Open WebUI type debt outside the vertical files. CP-7 verifies a filtered diagnostic pass for the vertical files.
 - Live prompt-to-tool QA requires a configured model provider and authenticated browser session. CP-7 validates the native tool sequence and frontend render contract with deterministic local fixtures.

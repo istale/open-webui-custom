@@ -168,3 +168,38 @@ def test_all_chart_types_render_png_and_thumbnail(tmp_path, chart_type):
     assert thumb_path.exists()
     assert info['raw_row_count'] == len(df)
     assert info['image_size_bytes'] > 0
+
+
+def test_chart_store_survives_restart_via_sidecar(tmp_path):
+    from open_webui.utils.data_analysis.chart_store import ChartRecord
+
+    png, thumb = ChartStore(tmp_path).paths_for('abc123')
+
+    writer = ChartStore(tmp_path)
+    writer.put(
+        ChartRecord(
+            chart_id='abc123',
+            user_id='user-1',
+            path=png,
+            thumb_path=thumb,
+            chart_type='control',
+            title='Durable chart',
+            query_id='q-1',
+            chat_id='chat-1',
+        )
+    )
+
+    # Simulate a fresh backend process / second worker: new in-process cache,
+    # same DATA_DIR. The record must be recoverable from the JSON sidecar.
+    reloaded = ChartStore(tmp_path).get('abc123')
+
+    assert reloaded is not None
+    assert reloaded.user_id == 'user-1'
+    assert reloaded.chat_id == 'chat-1'
+    assert reloaded.chart_type == 'control'
+    assert reloaded.path == png
+    assert reloaded.thumb_path == thumb
+
+
+def test_chart_store_get_returns_none_for_unknown(tmp_path):
+    assert ChartStore(tmp_path).get('does-not-exist') is None
