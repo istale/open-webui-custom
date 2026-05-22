@@ -2,10 +2,14 @@
 
 > **目的**：追蹤所有 `[core-touch]` 修改（即任何動到 Open WebUI 原生檔案的變動），讓未來月度 `git rebase upstream/main` 時有 single checklist 可走。
 >
+> **定位（2026-05-22 更新）**：這是一個**個人使用的 fork**，不打算把 vertical 功能 PR 回 `open-webui/open-webui`。因此本檔的唯一目的是 **降低月度 rebase 的衝突面積**，而非維持「對上游友善、容易被接受的小 patch」。
+>
 > **規則**：
-> - 任何 commit 訊息包含 `[core-touch]` 必須在此檔加 entry
-> - 任何 entry 變動（新增 / 移除 / 修改）必須在 PR description 提及
+> - 任何 commit 訊息包含 `[core-touch]` 必須在此檔加 entry（不變——rebase checklist 仰賴它）
 > - 月檢查時 walk through 此檔每個 entry，確認是否仍需要 / 仍正確
+> - ~~任何 entry 變動必須在 PR description 提及~~ → **已廢除**：個人 fork 沒有對上游的 PR
+>
+> **Core-touch 行數規矩放寬**：原 spec 的「每個 hook ≤ 5 行」是為了讓 patch 容易被上游接受。既然不 PR 回上游，這條降級成**建議而非硬規**——當「直接改 upstream 檔案」比「繞道 prop / hook injection」更清楚時就直接改，只要 (1) commit 加 `[core-touch]`、(2) 在此檔登錄受影響的檔案與行段方便 rebase 對照即可。判斷標準從「上游接受度」改為「rebase 衝突可控性」。
 >
 > **相關規格**：[`docs/spec/PROJECT_GUIDE.md` Core Touch Discipline](./spec/PROJECT_GUIDE.md#core-touch-discipline-fork-維護關鍵)
 
