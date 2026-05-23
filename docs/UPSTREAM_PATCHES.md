@@ -138,6 +138,19 @@ npm test
   - Upstream 加 `Chat.svelte` 接受 props 之一 → revert + use native
   - Vertical 改用獨立 `<Chat>` (fork-and-replace) → revert this hook（但成本更高，不推薦）
 
+#### P-009 — common/Image.svelte authenticated blob fetch for chart URLs
+- **Status**: ✅ Active (2026-05-23)
+- **File**: `src/lib/components/common/Image.svelte`
+- **Why required**: chat markdown images render a plain `<img>` (no Authorization
+  header) and this deployment has no auth cookie, so bearer-protected chart PNGs
+  (`/api/v1/data-analysis/charts/...`) 401 and fall back to the favicon ("OI" logo).
+- **Hook**: for URLs matching `/api/v1/data-analysis/charts/` only, fetch with the
+  token into a blob object URL; all other images keep native behavior. Paired with
+  a system-prompt rule telling the model to embed the exact url from the render_chart
+  result (commit on 2026-05-23).
+- **Removal condition**: if charts move to a cookie-authed or public URL, or upstream
+  adds token-aware image loading, revert and use native `<img>`.
+
 ### Previously Deferred Decisions
 
 #### P-004 — Chart Placeholder Render Path
