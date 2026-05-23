@@ -11,6 +11,8 @@
 	const minRight = 340;
 	const maxRight = 680;
 
+	let layoutEl: HTMLDivElement;
+
 	const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 	onMount(() => {
@@ -21,19 +23,24 @@
 	});
 
 	const resizeLeft = (clientX: number) => {
-		leftWidth = clamp(clientX, minLeft, maxLeft);
+		// clientX is viewport-relative; the layout may be offset by the native
+		// sidebar, so measure width from the layout's own left edge.
+		const originX = layoutEl?.getBoundingClientRect().left ?? 0;
+		leftWidth = clamp(clientX - originX, minLeft, maxLeft);
 		localStorage.setItem('data-analysis.layout.leftWidth', String(leftWidth));
 	};
 
 	const resizeRight = (clientX: number) => {
-		rightWidth = clamp(window.innerWidth - clientX, minRight, maxRight);
+		const rightEdge = layoutEl?.getBoundingClientRect().right ?? window.innerWidth;
+		rightWidth = clamp(rightEdge - clientX, minRight, maxRight);
 		localStorage.setItem('data-analysis.layout.rightWidth', String(rightWidth));
 	};
 </script>
 
 <div
+	bind:this={layoutEl}
 	class="da-layout"
-	style:grid-template-columns={`${leftWidth}px 7px minmax(360px, 1fr) 7px ${rightWidth}px`}
+	style:grid-template-columns={`${leftWidth}px 7px minmax(320px, 1fr) 7px minmax(${minRight}px, ${rightWidth}px)`}
 >
 	<aside class="panel left"><slot name="left" /></aside>
 	<Resizer side="left" onResize={resizeLeft} />
