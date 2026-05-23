@@ -1,6 +1,7 @@
 <script lang="ts">
-	import { getContext } from 'svelte';
+	import { getContext, onDestroy } from 'svelte';
 	import type { Writable } from 'svelte/store';
+	import { WEBUI_BASE_URL } from '$lib/constants';
 
 	export let card;
 	export let highlighted = false;
@@ -8,6 +9,40 @@
 	const i18n =
 		getContext<Writable<{ t: (key: string, options?: Record<string, unknown>) => string }>>('i18n');
 	let imageFailed = false;
+	let objectUrl = '';
+	let loadedFor = '';
+
+	// The chart PNG endpoint is protected by Open WebUI auth, so a plain
+	// <img src> (which cannot send the bearer token) 401s. Fetch it with the
+	// token and hand the <img> a blob object URL instead.
+	const loadImage = async (url: string) => {
+		if (!url || loadedFor === url) return;
+		loadedFor = url;
+		imageFailed = false;
+		if (objectUrl) {
+			URL.revokeObjectURL(objectUrl);
+			objectUrl = '';
+		}
+		try {
+			// Relative `/api/...` URLs resolve against the page origin, which in dev
+			// is the vite server, not the backend. Prefix WEBUI_BASE_URL so the
+			// request targets the API in both dev and production.
+			const target = /^https?:\/\//.test(url) ? url : `${WEBUI_BASE_URL}${url}`;
+			const res = await fetch(target, {
+				headers: { authorization: `Bearer ${localStorage.token}` }
+			});
+			if (!res.ok) throw new Error(`status ${res.status}`);
+			objectUrl = URL.createObjectURL(await res.blob());
+		} catch {
+			imageFailed = true;
+		}
+	};
+
+	$: loadImage(card?.url);
+
+	onDestroy(() => {
+		if (objectUrl) URL.revokeObjectURL(objectUrl);
+	});
 </script>
 
 <article id={`chart-${card.chartId}`} class:highlighted class="card">
@@ -21,8 +56,10 @@
 
 	{#if imageFailed}
 		<div class="image-fallback">{$i18n.t('Chart image unavailable')}</div>
+	{:else if objectUrl}
+		<img src={objectUrl} alt={card.title} loading="lazy" on:error={() => (imageFailed = true)} />
 	{:else}
-		<img src={card.url} alt={card.title} loading="lazy" on:error={() => (imageFailed = true)} />
+		<div class="image-fallback">{$i18n.t('Loading chart…')}</div>
 	{/if}
 
 	<section class="caption">

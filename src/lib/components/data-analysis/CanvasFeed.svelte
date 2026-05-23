@@ -82,12 +82,16 @@
 		const fallbackFields = `${args.x ?? ''}${args.y ? `, ${args.y}` : ''}`;
 		const explainedFields = csvOrList(explanation.fields);
 		const fields = args.explanation_fields ?? explainedFields;
+		const url =
+			attachment.url ?? text.match(/'url': '([^']+)'/)?.[1] ?? text.match(/"url": "([^"]+)"/)?.[1];
+		// Derive the id from the url so the card id, <img> target and
+		// chart.rendered event always reference the file that actually exists.
+		// Falling back to attachment.id / regex only when the url has no id.
 		const chartId =
+			url?.match(/charts\/([0-9a-fA-F]+)\.png/)?.[1] ??
 			attachment.id ??
 			text.match(/'chart_id': '([^']+)'/)?.[1] ??
 			text.match(/"chart_id": "([^"]+)"/)?.[1];
-		const url =
-			attachment.url ?? text.match(/'url': '([^']+)'/)?.[1] ?? text.match(/"url": "([^"]+)"/)?.[1];
 		if (!chartId || !url) return null;
 		return {
 			chartId,
