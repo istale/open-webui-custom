@@ -6,7 +6,12 @@
 	import DataAnalysisLayout from '$lib/components/data-analysis/DataAnalysisLayout.svelte';
 	import DatasetPanel from '$lib/components/data-analysis/DatasetPanel.svelte';
 	import { getDataAnalysisDatasets, logDataAnalysisEvent } from '$lib/apis/data-analysis';
-	import { datasets, datasetsState, selectedDatasetId } from '$lib/stores/data-analysis';
+	import {
+		datasets,
+		datasetsState,
+		selectedDatasetId,
+		markChartRenderedOnce
+	} from '$lib/stores/data-analysis';
 	import { DATA_ANALYSIS_SYSTEM_PROMPT } from '$lib/components/data-analysis/system-prompt';
 	import { createMessagesList } from '$lib/utils';
 
@@ -23,7 +28,6 @@
 	type DatasetSelectedEvent = CustomEvent<{ datasetId: string; from?: string }>;
 
 	let historySnapshot: HistorySnapshot = { messages: {}, currentId: null };
-	let loggedCharts = new Set<string>();
 
 	$: messages = historySnapshot.currentId
 		? createMessagesList(historySnapshot, historySnapshot.currentId)
@@ -93,8 +97,7 @@
 		slot="middle"
 		{messages}
 		on:chart-rendered={(e) => {
-			if (loggedCharts.has(e.detail.chartId)) return;
-			loggedCharts.add(e.detail.chartId);
+			if (!markChartRenderedOnce(chatId, e.detail.chartId)) return;
 			logDataAnalysisEvent({
 				event_type: 'chart.rendered',
 				chart_type: e.detail.chartType,
