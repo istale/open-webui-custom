@@ -73,6 +73,10 @@
 
 	.right {
 		border-inline-end: 0;
+		/* The embedded Chat caps its width at calc(100% - var(--sidebar-width))
+		   to clear the global sidebar in the normal full-page layout. Inside this
+		   panel the chat is already past everything, so zero it out to fill the column. */
+		--sidebar-width: 0px;
 	}
 
 	@media (max-width: 980px) {
