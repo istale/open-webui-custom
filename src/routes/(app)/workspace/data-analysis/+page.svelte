@@ -7,6 +7,7 @@
 	import DatasetPanel from '$lib/components/data-analysis/DatasetPanel.svelte';
 	import { getDataAnalysisDatasets, logDataAnalysisEvent } from '$lib/apis/data-analysis';
 	import { datasets, datasetsState, selectedDatasetId } from '$lib/stores/data-analysis';
+	import { DATA_ANALYSIS_SYSTEM_PROMPT } from '$lib/components/data-analysis/system-prompt';
 	import { createMessagesList } from '$lib/utils';
 
 	const i18n =
@@ -111,6 +112,7 @@
 			chatIdProp={chatId}
 			extraToolIds={['builtin:data-analysis']}
 			{extraMetadata}
+			extraSystemPrompt={DATA_ANALYSIS_SYSTEM_PROMPT}
 			chatRoutePrefix="/workspace/data-analysis"
 			onVerticalHistoryChange={(history) => (historySnapshot = history)}
 			onPromptSubmit={(prompt) =>

@@ -115,6 +115,7 @@
 	export let chatIdProp = '';
 	export let extraToolIds: string[] = [];
 	export let extraMetadata: Record<string, any> = {};
+	export let extraSystemPrompt = '';
 	export let chatRoutePrefix = '/c';
 	export let onVerticalHistoryChange = (_history: any) => {};
 	export let onPromptSubmit = (_prompt: string, _chatId: string) => {};
@@ -2305,10 +2306,12 @@
 			true;
 		// Always include system prompt — backend extracts it and prepends to DB messages.
 		// Only temp chats need conversation messages (persisted chats load from DB).
+		// [core-touch] vertical workspaces (e.g. data-analysis) pass extraSystemPrompt
+		// as a fallback so the model always gets the tool-workflow directive even when
+		// no chat-level or user-level system prompt is set.
+		const effectiveSystem = params?.system ?? $settings?.system ?? extraSystemPrompt ?? '';
 		let messages = [
-			params?.system || $settings.system
-				? { role: 'system', content: `${params?.system ?? $settings?.system ?? ''}` }
-				: undefined
+			effectiveSystem ? { role: 'system', content: `${effectiveSystem}` } : undefined
 		].filter(Boolean);
 
 		if ($temporaryChatEnabled) {
