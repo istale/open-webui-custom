@@ -106,9 +106,7 @@
 
 	const loadChat = async () => {
 		if (!chat) {
-			draggable = false;
 			chat = await getChatById(localStorage.token, id);
-			draggable = true;
 		}
 	};
 
