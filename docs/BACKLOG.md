@@ -25,6 +25,11 @@ Non-blocking items deferred from live QA / review. Each entry: what, why deferre
 
 ## Verification gaps (low risk)
 
-- Chart types `line / scatter / heatmap / spc / pareto / histogram` are covered by
-  unit tests but not yet exercised in live browser QA (control / box / bar were).
-- Branch / regenerate behavior in the workspace not yet live-tested.
+- Chart types `scatter / heatmap / pareto / histogram` are covered by unit tests
+  but not yet exercised in live browser QA. Live-verified so far: control, box,
+  bar, line, spc. (The frontend path is identical for all types — only the
+  matplotlib rendering differs, which the unit tests cover.)
+- ~~Branch / regenerate behavior~~ — live-verified 2026-05-24: regenerating creates
+  a new sibling branch with its own chart; the canvas tracks the active branch via
+  `createMessagesList(history, currentId)` and shows exactly one chart, swapping
+  correctly when navigating siblings (no duplication or leak).
