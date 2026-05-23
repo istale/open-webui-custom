@@ -126,9 +126,10 @@ npm test
   - 需要把 `metadata: { workspace_type: 'data-analysis', selected_dataset_id: ... }` 寫入 `chat.chat`
   - Plan B (fetch interceptor) 不能解決 native URL replacement（`/c/{id}`）也不解決 metadata persistence
 - **Intended hook**（單一 `[core-touch]` commit，~5–8 行）:
-  - 加 2 個 export props：`extraToolIds: string[] = []`、`extraMetadata: Record<string, any> = {}`
+  - 加 3 個 export props：`extraToolIds: string[] = []`、`extraMetadata: Record<string, any> = {}`、`extraSystemPrompt = ''`
   - `submitHandler` 內把 `extraToolIds` 合進送出 payload 的 `tool_ids`
   - `saveChatHandler` 內把 `extraMetadata` merge 進 `chat.chat.metadata`（不覆寫既有 keys）
+  - 系統訊息建構處（`messages[]` 的 system role）以 `extraSystemPrompt` 作 fallback：`params?.system ?? $settings?.system ?? extraSystemPrompt`（commit 24af662a2，live QA 證實沒有它模型不會走 tool workflow）
   - `navigateHandler` 內讀 chat document 的 `metadata.workspace_type`，若為 vertical 就跳 `/data-analysis/{id}` 取代 `/c/{id}` URL replace
 - **Owner**: vertical/data-analysis frontend (CP-6)
 - **Related spec**: [`frontend-spec.md` §9](./spec/frontend-spec.md) Plan A/B/C decision
