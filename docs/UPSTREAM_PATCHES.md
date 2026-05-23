@@ -118,8 +118,9 @@ npm test
 
 #### P-003 — Chat.svelte Extra Props + saveChatHandler Metadata Persistence
 - **Status**: ✅ Active (approved CP-1) — to be implemented in CP-6 (Frontend MVP)
-- **File**: `src/lib/components/chat/Chat.svelte`
+- **File**: `src/lib/components/chat/Chat.svelte`、`src/lib/components/layout/Sidebar/ChatItem.svelte`（`getChatHref` 依 `metadata.workspace_type` 路由）
 - **Plan tier**: Plan C（confirmed by inventory — `Chat.svelte:115` only exports `chatIdProp`, no `tool_ids`/`metadata` accept; `selectedToolIds` is locally owned `:151`; `navigateHandler()` `:193-252` resets it on every chat load; `saveChatHandler()` `:2808-2817` only persists `models/history/messages/params/files`，drops arbitrary metadata）
+- **⚠️ Rebase 陷阱**：`ChatItem.svelte` 的 `loadChat()` / `getChatHref()` **絕不可引用 `draggable` 變數**。此版 `ChatItem.svelte` 沒有宣告 `let draggable`（只在元素上以 `draggable={!confirmEdit}` 內聯使用），若引用會 `ReferenceError` → `getChatHref` reject → `goto` 不執行 → **所有對話（含一般 /c/）點擊導航全壞**。`loadChat` 只需 `if (!chat) chat = await getChatById(...)`。見 commit `f4bcea188`。
 - **Approval**: 2026-05-10 by user via review-log
 - **Why required**:
   - 需要把 `tool_ids: ['builtin:data-analysis']` 注入 chat completion payload
