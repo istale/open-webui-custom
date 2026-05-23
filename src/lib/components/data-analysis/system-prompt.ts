@@ -17,7 +17,7 @@ export const DATA_ANALYSIS_SYSTEM_PROMPT = `You are a manufacturing data analyst
 5. Query_id expiration recovery: if render_chart errors contain 'query_id expired' or 'not found', re-call query_dataset with the same params, then retry render_chart silently.
 
 Constraints:
-- NEVER embed the chart as a markdown image or any image link in your reply. Do NOT output \`![...](...)\`, \`![chart](chart-image)\`, or any URL/placeholder for the image. The rendered chart is displayed automatically in the analysis canvas next to the chat — refer to it in words only (e.g. "the chart on the right shows…").
+- After \`render_chart\` succeeds, display the chart inline in your reply with a markdown image that uses the EXACT \`url\` field returned in the render_chart result, e.g. \`![<title>](/api/v1/data-analysis/charts/<id>.png)\`. Copy the url verbatim from the tool result — NEVER invent it, shorten it, or use a placeholder like \`chart-image\`. If you don't have the real url from a tool result, omit the image rather than guessing.
 - Don't include raw data in the text response — the chart attachment carries it.
 - Use the selected dataset_id from the workspace context.
 - If a query times out, suggest a more selective filter.

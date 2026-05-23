@@ -5,7 +5,7 @@
 	import { settings } from '$lib/stores';
 	import ImagePreview from './ImagePreview.svelte';
 	import XMark from '$lib/components/icons/XMark.svelte';
-	import { getContext } from 'svelte';
+	import { getContext, onDestroy } from 'svelte';
 
 	export let src = '';
 	export let alt = '';
@@ -20,7 +20,42 @@
 	const i18n = getContext('i18n');
 
 	let _src = '';
-	$: _src = safeImageUrl(src.startsWith('/') ? `${WEBUI_BASE_URL}${src}` : src);
+	// [core-touch] Data-analysis chart PNGs are bearer-protected, so a plain <img>
+	// (which cannot send the Authorization header) 401s. For those URLs only,
+	// fetch with the token into a blob object URL; all other images are untouched.
+	let blobUrl = '';
+	let blobLoadedFor = '';
+	const isDataAnalysisChart = (url: string) => /\/api\/v1\/data-analysis\/charts\//.test(url);
+
+	const resolveSrc = async (rawSrc: string) => {
+		const resolved = rawSrc.startsWith('/') ? `${WEBUI_BASE_URL}${rawSrc}` : rawSrc;
+		if (!resolved || !isDataAnalysisChart(resolved)) {
+			_src = safeImageUrl(resolved);
+			return;
+		}
+		if (blobLoadedFor === resolved && blobUrl) {
+			_src = blobUrl;
+			return;
+		}
+		blobLoadedFor = resolved;
+		try {
+			const res = await fetch(resolved, {
+				headers: { authorization: `Bearer ${localStorage.token}` }
+			});
+			if (!res.ok) throw new Error(String(res.status));
+			if (blobUrl) URL.revokeObjectURL(blobUrl);
+			blobUrl = URL.createObjectURL(await res.blob());
+			_src = blobUrl;
+		} catch {
+			_src = safeImageUrl(resolved);
+		}
+	};
+
+	$: resolveSrc(src);
+
+	onDestroy(() => {
+		if (blobUrl) URL.revokeObjectURL(blobUrl);
+	});
 
 	let showImagePreview = false;
 </script>
