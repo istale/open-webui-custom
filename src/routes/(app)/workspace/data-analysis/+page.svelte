@@ -12,7 +12,7 @@
 		selectedDatasetId,
 		markChartRenderedOnce
 	} from '$lib/stores/data-analysis';
-	import { DATA_ANALYSIS_SYSTEM_PROMPT } from '$lib/components/data-analysis/system-prompt';
+	import { buildDataAnalysisSystemPrompt } from '$lib/components/data-analysis/system-prompt';
 	import { createMessagesList } from '$lib/utils';
 
 	const i18n =
@@ -33,6 +33,13 @@
 		? createMessagesList(historySnapshot, historySnapshot.currentId)
 		: [];
 	$: visibleDatasets = $datasets ?? [];
+	// Ephemeral system-prompt context: recomputed when the selection/filters change,
+	// injected fresh per send, never persisted into history (avoids stale selection).
+	$: extraSystemPrompt = buildDataAnalysisSystemPrompt({
+		datasetId: activeDatasetId,
+		datasetName: visibleDatasets.find((d) => d.id === activeDatasetId)?.name,
+		filters: activeFilters
+	});
 	$: extraMetadata = {
 		workspace_type: 'data-analysis',
 		schema_version: 1,
@@ -115,7 +122,7 @@
 			chatIdProp={chatId}
 			extraToolIds={['builtin:data-analysis']}
 			{extraMetadata}
-			extraSystemPrompt={DATA_ANALYSIS_SYSTEM_PROMPT}
+			{extraSystemPrompt}
 			chatRoutePrefix="/workspace/data-analysis"
 			onVerticalHistoryChange={(history) => (historySnapshot = history)}
 			onPromptSubmit={(prompt) =>
