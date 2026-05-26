@@ -85,6 +85,33 @@ capture path is correct (schema_v2, populates when present) — the gap is upstr
 Enabling `include_usage` is an upstream/connection-config change, out of Phase 0
 scope; logged here so token/cost analytics isn't assumed-working until that's set.
 
+---
+
+# Phase 1 — Trajectory schema + versioning
+
+### D9. Trajectory is rebuilt from the ledger ALONE (no native chat doc)
+The ledger already captures request snapshot + every tool call's args + outcome, so
+`trajectory.build_trajectory(events)` needs no coupling to `chat.chat.history`. Keeps
+it a pure, unit-testable function and avoids a second source of truth.
+
+**Correlation rules (events don't all share a key):**
+- Assistant-turn events share `message_id` → grouped into a `Turn`.
+- `prompt.submitted` has no `message_id` (fired before the assistant msg exists) →
+  paired to the first turn with `ts >= prompt.ts`. Heuristic, but robust for the
+  normal one-prompt-one-turn flow.
+- `chart.rendered` (frontend, no `message_id`) → attached to the turn whose render
+  action produced that `chart_id`.
+- `workspace.opened` / `dataset.selected` / `stream.*` → session-level timeline.
+
+### D10. `prompt_version` threads up from frontend; `tool_spec_version` is backend
+The system prompt is defined client-side (`system-prompt.ts`), so its version
+(`DATA_ANALYSIS_PROMPT_VERSION`) rides in `metadata.data_analysis.prompt_version` and
+the backend reads it into the snapshot. `TOOL_SPEC_VERSION` lives in a dependency-free
+`utils/data_analysis/versions.py` (so the logger can import it without pulling the tool
+registration machinery). Bump each when its contract changes.
+**Note:** `system_prompt_sha256` already fingerprints the *resolved* prompt per-turn;
+`prompt_version` is the *stable template* version — different granularities, both useful.
+
 ## Things to know / follow-ups
 - Snapshot links to the rest of a turn via `chat_id` + `message_id` (same correlation
   the other lifecycle events use). A full trajectory = request_prepared → tool.* →

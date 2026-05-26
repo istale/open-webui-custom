@@ -5,7 +5,7 @@ import logging
 from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import BigInteger, Boolean, Column, Integer, JSON, Text, insert, update
+from sqlalchemy import BigInteger, Boolean, Column, Integer, JSON, Text, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from open_webui.internal.db import Base, get_async_db_context
@@ -69,6 +69,36 @@ class DataAnalysisEventsTable:
             await db.execute(insert(DataAnalysisEvent), rows)
             await db.commit()
         return len(rows)
+
+    async def list_events_by_chat_id(
+        self, chat_id: str, include_deleted: bool = False, db: Optional[AsyncSession] = None
+    ) -> list[DataAnalysisEventModel]:
+        """Return all events for one chat, ordered by ts then id (stable). Used by
+        the trajectory builder / replay export."""
+        async with get_async_db_context(db) as db:
+            stmt = select(DataAnalysisEvent).where(DataAnalysisEvent.chat_id == chat_id)
+            if not include_deleted:
+                stmt = stmt.where(DataAnalysisEvent.is_deleted.is_(False))
+            stmt = stmt.order_by(DataAnalysisEvent.ts.asc(), DataAnalysisEvent.id.asc())
+            result = await db.execute(stmt)
+            return [DataAnalysisEventModel.model_validate(row) for row in result.scalars().all()]
+
+    async def list_chat_ids(
+        self, include_deleted: bool = False, since_ts: Optional[int] = None, db: Optional[AsyncSession] = None
+    ) -> list[str]:
+        """Distinct chat_ids that have events (for batch export). Newest first."""
+        async with get_async_db_context(db) as db:
+            stmt = select(DataAnalysisEvent.chat_id).where(DataAnalysisEvent.chat_id.isnot(None))
+            if not include_deleted:
+                stmt = stmt.where(DataAnalysisEvent.is_deleted.is_(False))
+            if since_ts is not None:
+                stmt = stmt.where(DataAnalysisEvent.ts >= since_ts)
+            result = await db.execute(stmt)
+            seen: dict[str, None] = {}
+            for cid in result.scalars().all():
+                if cid is not None:
+                    seen[cid] = None
+            return list(seen.keys())
 
     async def mark_deleted(self, chat_id: str, db: Optional[AsyncSession] = None) -> int:
         deleted_at = int(time.time() * 1000)

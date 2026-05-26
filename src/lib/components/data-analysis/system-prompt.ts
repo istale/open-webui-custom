@@ -1,3 +1,8 @@
+// Bump when the static system-prompt template below changes. Threaded into
+// chat metadata so model.request_prepared can attribute a trajectory to a
+// specific prompt version (interaction-replay Phase 1).
+export const DATA_ANALYSIS_PROMPT_VERSION = 'da-sys-2026-05-27';
+
 // Vertical system prompt for the data-analysis workspace.
 // Mirrors docs/spec/tools-schema.brief.md "System Prompt 要點".
 // Injected via Chat.svelte `extraSystemPrompt` so the model always follows the

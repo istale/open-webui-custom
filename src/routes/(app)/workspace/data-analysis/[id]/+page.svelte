@@ -14,7 +14,10 @@
 		selectedDatasetId,
 		markChartRenderedOnce
 	} from '$lib/stores/data-analysis';
-	import { buildDataAnalysisSystemPrompt } from '$lib/components/data-analysis/system-prompt';
+	import {
+		buildDataAnalysisSystemPrompt,
+		DATA_ANALYSIS_PROMPT_VERSION
+	} from '$lib/components/data-analysis/system-prompt';
 	import { createMessagesList } from '$lib/utils';
 
 	const i18n =
@@ -46,7 +49,10 @@
 	$: extraMetadata = {
 		workspace_type: 'data-analysis',
 		schema_version: 1,
-		data_analysis: { selected_dataset_id: activeDatasetId }
+		data_analysis: {
+			selected_dataset_id: activeDatasetId,
+			prompt_version: DATA_ANALYSIS_PROMPT_VERSION
+		}
 	};
 
 	const loadDatasets = async () => {

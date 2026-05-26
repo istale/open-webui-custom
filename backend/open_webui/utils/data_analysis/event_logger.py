@@ -180,6 +180,14 @@ def _build_request_snapshot(form_data: dict[str, Any], metadata: dict[str, Any])
 
     tool_ids = metadata.get('tool_ids') or form_data.get('tool_ids') or []
 
+    # Phase 1 version stamps: prompt_version threads up from the frontend via
+    # metadata (the prompt is defined client-side); tool_spec_version is a backend
+    # constant. Together they attribute a trajectory to a specific config.
+    from open_webui.utils.data_analysis.versions import TOOL_SPEC_VERSION
+
+    da_meta = metadata.get('data_analysis') or {}
+    prompt_version = da_meta.get('prompt_version') or metadata.get('prompt_version')
+
     return {
         'model': form_data.get('model', ''),
         'params': params,
@@ -189,6 +197,8 @@ def _build_request_snapshot(form_data: dict[str, Any], metadata: dict[str, Any])
         if system_prompt
         else None,
         'message_count': len(messages),
+        'prompt_version': prompt_version,
+        'tool_spec_version': TOOL_SPEC_VERSION,
     }
 
 
