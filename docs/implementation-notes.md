@@ -182,6 +182,20 @@ diverged, `passed: true`.
 `charts_viewed: 0` (chart.viewed is new — no events yet). This is exactly the
 enhancement signal the whole effort was for.
 
+### D17. prompt_version is embedded in the prompt text, not chat metadata
+Live check showed `prompt_version: None`: `extraMetadata` is persisted to chat
+metadata but is NOT forwarded into the *completion request* metadata the backend hook
+reads (only `tool_ids` travels that path). Rather than plumb metadata through the
+completion call (more core-touch), the version marker is embedded as a line in the
+`[Workspace context]` block — so it rides inside the captured `system_prompt`. The
+backend parses `prompt_version:\s*(\S+)` from the system prompt as a fallback. Verified
+live: `prompt_version: da-sys-2026-05-27`, `tool_spec_version: da-tools-2026-05-27`,
+and `chart.viewed` incrementing.
+
+**Known (already in backlog):** `chart.viewed` / `chart.rendered` fired on the
+new-chat index route carry `chat_id=null` (the page handler there has no chat id yet);
+chart_id is in the payload so trajectories still attach them correctly.
+
 ## Things to know / follow-ups
 - Snapshot links to the rest of a turn via `chat_id` + `message_id` (same correlation
   the other lifecycle events use). A full trajectory = request_prepared → tool.* →

@@ -42,7 +42,14 @@ export function buildDataAnalysisSystemPrompt(ctx: {
 	datasetName?: string;
 	filters?: string[];
 }): string {
-	const lines: string[] = ['', '[Workspace context — current UI state, may change between turns]'];
+	const lines: string[] = [
+		'',
+		'[Workspace context — current UI state, may change between turns]',
+		// Stable version marker — travels inside the captured system prompt so the
+		// replay snapshot can attribute the trajectory even when chat metadata isn't
+		// forwarded into the completion request. Backend parses this as a fallback.
+		`prompt_version: ${DATA_ANALYSIS_PROMPT_VERSION}`
+	];
 	if (ctx.datasetId) {
 		lines.push(
 			`selected_dataset: ${ctx.datasetId}${ctx.datasetName ? ` (${ctx.datasetName})` : ''}`

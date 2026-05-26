@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
+import re
 import time
 from typing import Any
 from uuid import uuid4
@@ -187,6 +188,12 @@ def _build_request_snapshot(form_data: dict[str, Any], metadata: dict[str, Any])
 
     da_meta = metadata.get('data_analysis') or {}
     prompt_version = da_meta.get('prompt_version') or metadata.get('prompt_version')
+    if not prompt_version and system_prompt:
+        # Fallback: the version marker is embedded in the system prompt text
+        # (chat metadata isn't always forwarded into the completion request).
+        match = re.search(r'prompt_version:\s*(\S+)', system_prompt)
+        if match:
+            prompt_version = match.group(1)
 
     return {
         'model': form_data.get('model', ''),

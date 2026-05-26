@@ -223,6 +223,28 @@ def test_request_snapshot_and_usage_captured_for_replay(monkeypatch):
     assert ac['payload']['usage'] == {'prompt_tokens': 120, 'completion_tokens': 30, 'total_tokens': 150}
 
 
+def test_prompt_version_parsed_from_system_prompt_fallback(monkeypatch):
+    emitted = []
+    monkeypatch.setattr(
+        'open_webui.utils.data_analysis.event_logger.schedule_log_event',
+        lambda **kwargs: emitted.append(kwargs),
+    )
+    schedule_chat_lifecycle_events(
+        user_id='u',
+        metadata={'tool_ids': ['builtin:data-analysis'], 'chat_id': 'c', 'message_id': 'm1'},
+        output=[{'type': 'message', 'content': [{'type': 'output_text', 'text': 'x'}]}],
+        content='x',
+        started_at=0,
+        form_data={
+            'model': 'M',
+            'messages': [{'role': 'system', 'content': 'Rules...\nprompt_version: da-sys-2026-05-27\n'}],
+        },
+    )
+    snap = next(e for e in emitted if e['event_type'] == 'model.request_prepared')['payload']
+    # No prompt_version in metadata -> parsed from the embedded marker.
+    assert snap['prompt_version'] == 'da-sys-2026-05-27'
+
+
 def test_chat_lifecycle_events_skip_non_vertical_context(monkeypatch):
     emitted = []
     monkeypatch.setattr('open_webui.utils.data_analysis.event_logger.schedule_log_event', lambda **kwargs: emitted.append(kwargs))
