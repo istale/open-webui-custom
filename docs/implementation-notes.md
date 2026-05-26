@@ -138,6 +138,24 @@ query_id so render actions reference the live cache entry.
 withdrawn), supports a `since_ts` retention window, and a `redact` flag that masks
 free-text (`user_prompt`, `system_prompt`) for sharing while keeping structure/metadata.
 
+---
+
+# Phase 3 — Reward / quality signals
+
+### D13. Thumbs rewards via export-time join, NOT a new core-touch event
+Open WebUI already stores ratings in its `feedback` table (data.message_id + rating).
+Rather than core-touching the rating UI to emit `message.thumbs_*` events, the export
+overlays ratings with `attach_feedback(traj, Feedbacks.get_feedbacks_by_chat_id)` —
+joined by `message_id`. Keeps `build_trajectory` ledger-pure (D9) while still
+surfacing the reward. `with_feedback=True` by default in `export_trajectories`.
+
+### D14. `chart.viewed` is the one genuinely-new signal (vertical-only, no core touch)
+Engagement ("did the user actually look at the chart") isn't in any native signal, so
+ChartCardCanvas gets an `IntersectionObserver` (>=50% visible) → dispatches `view` →
+CanvasFeed → page → `chart.viewed` ledger event. Deduped per chart id in localStorage
+(`markChartViewedOnce`), so reloads don't re-count. Added to the frontend whitelist.
+`followup.clicked` (already P0) is the other engagement signal.
+
 ## Things to know / follow-ups
 - Snapshot links to the rest of a turn via `chat_id` + `message_id` (same correlation
   the other lifecycle events use). A full trajectory = request_prepared → tool.* →

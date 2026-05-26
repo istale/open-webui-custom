@@ -41,6 +41,22 @@ export function markChartRenderedOnce(_chatId: string, chartId: string): boolean
 	}
 }
 
+// chart.viewed engagement signal — once per chart id ever (like rendered), so a
+// chart already seen isn't re-counted on reload. Separate localStorage key.
+const VIEWED_KEY = 'da:viewed';
+export function markChartViewedOnce(chartId: string): boolean {
+	if (!chartId) return false;
+	try {
+		const seen = new Set<string>(JSON.parse(localStorage.getItem(VIEWED_KEY) ?? '[]'));
+		if (seen.has(chartId)) return false;
+		seen.add(chartId);
+		localStorage.setItem(VIEWED_KEY, JSON.stringify([...seen].slice(-500)));
+		return true;
+	} catch {
+		return false; // viewed is best-effort; on storage error, don't spam
+	}
+}
+
 type Listener = (payload: any) => void;
 const listeners = new Map<string, Set<Listener>>();
 

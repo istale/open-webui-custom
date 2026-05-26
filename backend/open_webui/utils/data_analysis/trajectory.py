@@ -47,7 +47,8 @@ class Turn:
     actions: list[ToolAction] = field(default_factory=list)
     outcome: dict[str, Any] | None = None
     charts_rendered: list[str] = field(default_factory=list)
-    reward: dict[str, Any] | None = None  # Phase 3
+    charts_viewed: list[str] = field(default_factory=list)  # Phase 3 engagement
+    reward: dict[str, Any] | None = None  # Phase 3 (thumbs, via attach_feedback)
 
 
 @dataclass
@@ -109,6 +110,7 @@ def build_trajectory(events: list[Any]) -> Trajectory:
     pending_prompts: list[dict[str, Any]] = []
     session_events: list[dict[str, Any]] = []
     chart_rendered: list[dict[str, Any]] = []
+    chart_viewed: list[dict[str, Any]] = []
 
     def _turn_for(msg_id: str, ts: int) -> Turn:
         if msg_id not in turns_by_msg:
@@ -132,6 +134,10 @@ def build_trajectory(events: list[Any]) -> Trajectory:
 
         if et == 'chart.rendered':
             chart_rendered.append({'ts': ts, 'payload': pl})
+            continue
+
+        if et == 'chart.viewed':
+            chart_viewed.append({'ts': ts, 'payload': pl})
             continue
 
         if not mid:
@@ -189,7 +195,38 @@ def build_trajectory(events: list[Any]) -> Trajectory:
         if turn is not None and cid not in turn.charts_rendered:
             turn.charts_rendered.append(cid)
 
+    for cv in chart_viewed:
+        cid = cv['payload'].get('chart_id')
+        turn = chart_to_turn.get(cid)
+        if turn is not None and cid not in turn.charts_viewed:
+            turn.charts_viewed.append(cid)
+
     return Trajectory(chat_id=chat_id, user_id=user_id, session_events=session_events, turns=turns)
+
+
+def attach_feedback(traj_dict: dict[str, Any], feedback_items: list[dict[str, Any]]) -> dict[str, Any]:
+    """Overlay thumbs/feedback onto a trajectory's turns by message_id (Phase 3).
+
+    Kept separate from build_trajectory so the builder stays ledger-pure (D9);
+    feedback is an inherently-joined signal living in Open WebUI's `feedback` table.
+    `feedback_items` are FeedbackModel.model_dump() dicts (data.message_id + rating).
+    """
+    by_msg: dict[str, dict[str, Any]] = {}
+    for fb in feedback_items:
+        data = fb.get('data') or {}
+        mid = data.get('message_id') or (fb.get('meta') or {}).get('message_id')
+        if not mid:
+            continue
+        by_msg[mid] = {
+            'rating': data.get('rating'),
+            'reason': data.get('reason'),
+            'comment': data.get('comment'),
+        }
+    for turn in traj_dict.get('turns', []):
+        reward = by_msg.get(turn.get('message_id'))
+        if reward is not None:
+            turn['reward'] = reward
+    return traj_dict
 
 
 async def load_trajectory(chat_id: str, include_deleted: bool = False) -> Trajectory:

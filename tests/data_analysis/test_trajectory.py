@@ -7,7 +7,7 @@ BACKEND_DIR = Path(__file__).resolve().parents[2] / 'backend'
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from open_webui.utils.data_analysis.trajectory import build_trajectory
+from open_webui.utils.data_analysis.trajectory import attach_feedback, build_trajectory
 
 
 def _ev(ts, event_type, message_id=None, payload=None, **kw):
@@ -73,6 +73,21 @@ def test_build_trajectory_reconstructs_full_turn():
     assert fail.args['x'] == 'bin' and fail.args['y'] == 'count'  # structured failure args
     assert turn.outcome['usage'] == {'total_tokens': 150}
     assert turn.charts_rendered == ['c1']  # chart.rendered attached by chart_id
+
+
+def test_chart_viewed_and_feedback_reward():
+    events = [
+        _ev(130, 'model.request_prepared', message_id='m1', payload={'model': 'X'}),
+        _ev(170, 'tool.render_chart.succeeded', message_id='m1', tool_name='render_chart',
+            payload={'chart_type': 'line', 'x': 't', 'y': 'v', 'chart_id': 'c1', 'query_id': 'q1'}),
+        _ev(180, 'message.assistant_completed', message_id='m1', payload={'tool_call_count': 1}),
+        _ev(200, 'chart.viewed', payload={'chart_id': 'c1', 'chart_type': 'line'}),
+    ]
+    d = build_trajectory(events).to_dict()
+    assert d['turns'][0]['charts_viewed'] == ['c1']
+
+    d = attach_feedback(d, [{'data': {'message_id': 'm1', 'rating': 1, 'reason': 'clear'}}])
+    assert d['turns'][0]['reward'] == {'rating': 1, 'reason': 'clear', 'comment': None}
 
 
 def test_build_trajectory_handles_unordered_and_multiturn():

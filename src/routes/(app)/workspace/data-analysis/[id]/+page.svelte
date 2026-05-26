@@ -12,7 +12,8 @@
 		datasets,
 		datasetsState,
 		selectedDatasetId,
-		markChartRenderedOnce
+		markChartRenderedOnce,
+		markChartViewedOnce
 	} from '$lib/stores/data-analysis';
 	import {
 		buildDataAnalysisSystemPrompt,
@@ -148,6 +149,15 @@
 					chart_type: e.detail.chartType,
 					displayed_in: 'canvas-card'
 				}
+			});
+		}}
+		on:chart-viewed={(e) => {
+			if (!markChartViewedOnce(e.detail.chartId)) return;
+			logDataAnalysisEvent({
+				event_type: 'chart.viewed',
+				chat_id: chatId,
+				chart_type: e.detail.chartType,
+				payload: { chart_id: e.detail.chartId, chart_type: e.detail.chartType }
 			});
 		}}
 	/>

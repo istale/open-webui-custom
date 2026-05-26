@@ -16,6 +16,7 @@ FRONTEND_ALLOWED_EVENT_TYPES = {
     'dataset.selected',
     'prompt.submitted',
     'chart.rendered',
+    'chart.viewed',
     'stream.timeout',
     'stream.aborted',
     'followup.clicked',

@@ -50,6 +50,7 @@ async def export_trajectories(
     since_ts: int | None = None,
     redact: bool = False,
     include_deleted: bool = False,
+    with_feedback: bool = True,
 ) -> list[dict[str, Any]]:
     """Build trajectory records for export.
 
@@ -57,9 +58,10 @@ async def export_trajectories(
       excluded (consent/retention).
     - `since_ts` applies a retention window (only chats with events at/after it).
     - `redact=True` masks free-text (user prompt, system prompt) for sharing.
+    - `with_feedback=True` overlays thumbs ratings from Open WebUI's feedback table.
     """
     from open_webui.models.data_analysis_events import DataAnalysisEvents
-    from open_webui.utils.data_analysis.trajectory import build_trajectory
+    from open_webui.utils.data_analysis.trajectory import attach_feedback, build_trajectory
 
     if chat_ids is None:
         chat_ids = await DataAnalysisEvents.list_chat_ids(
@@ -72,6 +74,14 @@ async def export_trajectories(
         if not events:
             continue
         d = build_trajectory(events).to_dict()
+        if with_feedback:
+            try:
+                from open_webui.models.feedbacks import Feedbacks
+
+                feedbacks = await Feedbacks.get_feedbacks_by_chat_id(cid)
+                d = attach_feedback(d, [fb.model_dump() for fb in feedbacks])
+            except Exception:  # noqa: BLE001 — feedback overlay is best-effort
+                pass
         if redact:
             d = _redact_trajectory(d)
         out.append(d)

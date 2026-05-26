@@ -1,10 +1,34 @@
 <script lang="ts">
-	import { getContext, onDestroy } from 'svelte';
+	import { createEventDispatcher, getContext, onDestroy, onMount } from 'svelte';
 	import type { Writable } from 'svelte/store';
 	import { WEBUI_BASE_URL } from '$lib/constants';
 
 	export let card;
 	export let highlighted = false;
+
+	const dispatch = createEventDispatcher();
+	let cardEl: HTMLElement;
+	let viewObserver: IntersectionObserver | undefined;
+
+	onMount(() => {
+		// Phase 3: emit a `view` once the card is meaningfully on screen (>=50%),
+		// as an engagement signal. Dedup is handled upstream per chart id.
+		if (typeof IntersectionObserver === 'undefined' || !cardEl) return;
+		viewObserver = new IntersectionObserver(
+			(entries) => {
+				for (const e of entries) {
+					if (e.isIntersecting) {
+						dispatch('view', { chartId: card.chartId, chartType: card.chartType });
+						viewObserver?.disconnect();
+					}
+				}
+			},
+			{ threshold: 0.5 }
+		);
+		viewObserver.observe(cardEl);
+	});
+
+	onDestroy(() => viewObserver?.disconnect());
 
 	const i18n =
 		getContext<Writable<{ t: (key: string, options?: Record<string, unknown>) => string }>>('i18n');
@@ -45,7 +69,7 @@
 	});
 </script>
 
-<article id={`chart-${card.chartId}`} class:highlighted class="card">
+<article bind:this={cardEl} id={`chart-${card.chartId}`} class:highlighted class="card">
 	<header>
 		<div>
 			<h3>{card.title}</h3>
