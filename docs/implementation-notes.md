@@ -112,6 +112,32 @@ registration machinery). Bump each when its contract changes.
 **Note:** `system_prompt_sha256` already fingerprints the *resolved* prompt per-turn;
 `prompt_version` is the *stable template* version — different granularities, both useful.
 
+---
+
+# Phase 2 — Exporter + replay harness
+
+### D11. Replay re-runs TOOL calls, not the LLM
+Re-running the model is non-deterministic and needs a provider. The tool layer is
+deterministic against `InMemoryDatasetRepository`, so `replay_trajectory` re-issues
+the recorded `query_dataset` SQL + `render_chart` args and diffs success/failure vs.
+the recorded outcome. This is the CI-friendly regression signal ("would this
+trajectory's tool sequence still work today?"). A recorded *failure* that reproduces
+counts as a match (deterministic), so the QA "Unknown column(s): count" case replays
+cleanly as fail==fail.
+
+**render_chart caption gap:** title/explanation_* aren't in the ledger, but they don't
+affect render success — only x/y/color/chart_type/query_id do (which we have). Replay
+supplies placeholder captions. So pass/fail replay is faithful; we just can't
+reproduce the human-readable caption text.
+
+**query_id remap:** recorded query_ids are stale; replay maps recorded→freshly-produced
+query_id so render actions reference the live cache entry.
+
+### D12. Export honours soft-delete + retention + redaction
+`export_trajectories` excludes `is_deleted` chats by default (user-removed = consent
+withdrawn), supports a `since_ts` retention window, and a `redact` flag that masks
+free-text (`user_prompt`, `system_prompt`) for sharing while keeping structure/metadata.
+
 ## Things to know / follow-ups
 - Snapshot links to the rest of a turn via `chat_id` + `message_id` (same correlation
   the other lifecycle events use). A full trajectory = request_prepared → tool.* →

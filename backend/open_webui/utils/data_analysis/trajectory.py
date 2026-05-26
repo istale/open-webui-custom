@@ -146,6 +146,11 @@ def build_trajectory(events: list[Any]) -> Trajectory:
         elif et == 'message.assistant_completed':
             turn.outcome = pl
         elif et.startswith('tool.'):
+            args = {k: pl[k] for k in _ARG_KEYS if k in pl}
+            # dataset_id lives in the event column, not the payload; lift it in
+            # so replay can re-issue query_dataset against the right dataset.
+            if ev.get('dataset_id') and 'dataset_id' not in args:
+                args['dataset_id'] = ev['dataset_id']
             turn.actions.append(
                 ToolAction(
                     ts=ts,
@@ -154,7 +159,7 @@ def build_trajectory(events: list[Any]) -> Trajectory:
                     success=bool(ev.get('success', True)),
                     error_code=ev.get('error_code'),
                     duration_ms=ev.get('duration_ms'),
-                    args={k: pl[k] for k in _ARG_KEYS if k in pl},
+                    args=args,
                     result={k: pl[k] for k in _RESULT_KEYS if k in pl},
                 )
             )
