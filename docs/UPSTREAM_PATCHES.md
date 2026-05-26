@@ -138,7 +138,7 @@ npm test
   - Upstream 加 `Chat.svelte` 接受 props 之一 → revert + use native
   - Vertical 改用獨立 `<Chat>` (fork-and-replace) → revert this hook（但成本更高，不推薦）
 
-#### P-009 — common/Image.svelte authenticated blob fetch for chart URLs
+#### P-010 — common/Image.svelte authenticated blob fetch for chart URLs
 - **Status**: ✅ Active (2026-05-23)
 - **File**: `src/lib/components/common/Image.svelte`
 - **Why required**: chat markdown images render a plain `<img>` (no Authorization
@@ -232,12 +232,18 @@ npm test
 - **File**: `backend/open_webui/utils/middleware.py`
 - **Lines**: ~25 lines across native non-streaming and streaming completion paths
 - **Commit prefix**: `[core-touch]`
-- **First introduced**: `7cdefd2d6`
+- **First introduced**: `7cdefd2d6`; Phase 0 extension `56df77fb1`
 - **Why required**:
   The event ledger needs `model.thinking_completed` and
   `message.assistant_completed` events, but Open WebUI owns the native
   streaming lifecycle and final assistant-message completion state. There is no
   plugin lifecycle hook for observing the finalized OR-style output items.
+- **Phase 0 extension (`56df77fb1`)**: the two call sites now also forward
+  `form_data` and `usage` into `schedule_chat_lifecycle_events`, so the vertical
+  can emit the `model.request_prepared` input snapshot and token usage. The
+  middleware change is only "pass two more kwargs"; all extraction stays in
+  `event_logger.py`. If rebasing, re-add `form_data=ctx['form_data']` +
+  `usage=response_data.get('usage')` (non-streaming) / `usage=usage` (streaming).
 - **Plan tier**: Plan B（tiny lifecycle hook; parsing and fail-safe scheduling remain in `utils/data_analysis/event_logger.py`）
 - **Approval**: 2026-05-12 by user / Tech Lead
 - **Owner**: vertical/data-analysis backend
