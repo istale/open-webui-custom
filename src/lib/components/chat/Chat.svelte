@@ -118,7 +118,7 @@
 	export let extraSystemPrompt = '';
 	export let chatRoutePrefix = '/c';
 	export let onVerticalHistoryChange = (_history: any) => {};
-	export let onPromptSubmit = (_prompt: string, _chatId: string) => {};
+	export let onPromptSubmit = (_prompt: string, _chatId: string, _meta?: { model?: string }) => {};
 	export let onStreamAbort = (_chatId: string) => {};
 
 	let loading = true;
@@ -1965,7 +1965,7 @@
 
 	const submitHandler = async (userPrompt, { _raw = false } = {}) => {
 		console.log('submitHandler', userPrompt, $chatId);
-		onPromptSubmit(userPrompt, $chatId);
+		onPromptSubmit(userPrompt, $chatId, { model: selectedModels?.[0] ?? '' });
 
 		const _selectedModels = selectedModels.map((modelId) =>
 			$models.map((m) => m.id).includes(modelId) ? modelId : ''

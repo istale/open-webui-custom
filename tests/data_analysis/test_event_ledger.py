@@ -175,6 +175,54 @@ def test_chat_lifecycle_events_emit_for_vertical_context(monkeypatch):
     assert emitted[1]['payload']['had_thinking'] is True
 
 
+def test_request_snapshot_and_usage_captured_for_replay(monkeypatch):
+    emitted = []
+    monkeypatch.setattr(
+        'open_webui.utils.data_analysis.event_logger.schedule_log_event',
+        lambda **kwargs: emitted.append(kwargs),
+    )
+
+    schedule_chat_lifecycle_events(
+        user_id='user-1',
+        metadata={
+            'workspace_type': 'data-analysis',
+            'chat_id': 'chat-1',
+            'message_id': 'msg-1',
+            'tool_ids': ['builtin:data-analysis'],
+            'params': {'temperature': 0.7, 'function_calling': 'native', 'secret': 'drop-me'},
+        },
+        output=[{'type': 'message', 'content': [{'type': 'output_text', 'text': 'done'}]}],
+        content='done',
+        started_at=0,
+        form_data={
+            'model': 'MiniMax-M2.7',
+            'messages': [
+                {'role': 'system', 'content': 'You are a manufacturing analyst.\n[Workspace context]'},
+                {'role': 'user', 'content': 'draw it'},
+            ],
+        },
+        usage={'prompt_tokens': 120, 'completion_tokens': 30, 'total_tokens': 150, 'extra': 9},
+    )
+
+    by_type = {e['event_type']: e for e in emitted}
+
+    # Request snapshot emitted, first, with faithful input.
+    assert emitted[0]['event_type'] == 'model.request_prepared'
+    snap = by_type['model.request_prepared']['payload']
+    assert snap['model'] == 'MiniMax-M2.7'
+    assert snap['tool_ids'] == ['builtin:data-analysis']
+    assert '[Workspace context]' in snap['system_prompt']
+    assert snap['system_prompt_sha256'] and len(snap['system_prompt_sha256']) == 64
+    assert snap['message_count'] == 2
+    # params curated to whitelist (D4): secret dropped, relevant kept.
+    assert snap['params'] == {'temperature': 0.7, 'function_calling': 'native'}
+
+    # Usage curated onto assistant_completed, schema bumped to 2 (D5).
+    ac = by_type['message.assistant_completed']
+    assert ac['schema_version'] == 2
+    assert ac['payload']['usage'] == {'prompt_tokens': 120, 'completion_tokens': 30, 'total_tokens': 150}
+
+
 def test_chat_lifecycle_events_skip_non_vertical_context(monkeypatch):
     emitted = []
     monkeypatch.setattr('open_webui.utils.data_analysis.event_logger.schedule_log_event', lambda **kwargs: emitted.append(kwargs))

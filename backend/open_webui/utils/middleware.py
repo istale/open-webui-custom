@@ -3475,6 +3475,8 @@ async def non_streaming_chat_response_handler(response, ctx):
                             output=response_output,
                             content=content,
                             started_at=response_started_at,
+                            form_data=ctx['form_data'],
+                            usage=response_data.get('usage'),
                         )
                     except Exception as e:
                         log.warning('data-analysis lifecycle emit failed: %s', e)
@@ -5055,6 +5057,8 @@ async def streaming_chat_response_handler(response, ctx):
                         output=output,
                         content=data['content'],
                         started_at=response_started_at,
+                        form_data=form_data,
+                        usage=usage,
                     )
                 except Exception as e:
                     log.warning('data-analysis lifecycle emit failed: %s', e)

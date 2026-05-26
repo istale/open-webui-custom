@@ -125,13 +125,13 @@
 			{extraSystemPrompt}
 			chatRoutePrefix="/workspace/data-analysis"
 			onVerticalHistoryChange={(history) => (historySnapshot = history)}
-			onPromptSubmit={(prompt) =>
+			onPromptSubmit={(prompt, _chatId, meta) =>
 				logDataAnalysisEvent({
 					event_type: 'prompt.submitted',
 					payload: {
 						prompt_text: prompt,
 						prompt_length: prompt.length,
-						model: '',
+						model: meta?.model ?? '',
 						is_first_in_chat: !chatId
 					},
 					dataset_id: activeDatasetId || undefined

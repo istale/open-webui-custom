@@ -325,6 +325,10 @@ class Tools:
         """
         started_at = time.perf_counter()
         user_id = _require_user(__user__)
+        # Phase 0 (replay): record the chart args the model requested on every
+        # render event, so failures like "Unknown column(s): count" are
+        # analyzable structurally without parsing the error string.
+        chart_args = {'x': x, 'y': y, 'color': color or None, 'facet': facet or None}
         entry = self.query_cache.get(query_id, user_id=user_id)
         if entry is None:
             exc = ValueError(f'query_id {query_id} expired or not found. Please re-run query_dataset.')
@@ -332,7 +336,12 @@ class Tools:
                 event_type='tool.render_chart.failed',
                 user_id=user_id,
                 metadata=__metadata__,
-                payload={'query_id': query_id, 'chart_type': chart_type, 'error_message': str(exc)},
+                payload={
+                    'query_id': query_id,
+                    'chart_type': chart_type,
+                    'error_message': str(exc),
+                    **chart_args,
+                },
                 tool_name='render_chart',
                 chart_type=chart_type,
                 started_at=started_at,
@@ -362,7 +371,12 @@ class Tools:
                 event_type='tool.render_chart.failed',
                 user_id=user_id,
                 metadata=__metadata__,
-                payload={'query_id': query_id, 'chart_type': chart_type, 'error_message': str(exc)},
+                payload={
+                    'query_id': query_id,
+                    'chart_type': chart_type,
+                    'error_message': str(exc),
+                    **chart_args,
+                },
                 tool_name='render_chart',
                 chart_type=chart_type,
                 started_at=started_at,
@@ -423,6 +437,7 @@ class Tools:
                 'chart_id': chart_id,
                 'image_size_bytes': render_info['image_size_bytes'],
                 'statistics': response['attachment']['metadata']['explanation']['statistics'],
+                **chart_args,
             },
             tool_name='render_chart',
             chart_type=render_info['chart_type'],

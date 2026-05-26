@@ -1,10 +1,23 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import time
 from typing import Any
 from uuid import uuid4
+
+# Replay-relevant params kept in the request snapshot (D4). Everything else in
+# metadata['params'] is dropped to keep the row small and avoid leaking fields.
+_SNAPSHOT_PARAM_KEYS = (
+    'temperature',
+    'top_p',
+    'top_k',
+    'max_tokens',
+    'seed',
+    'function_calling',
+    'reasoning',
+)
 
 log = logging.getLogger(__name__)
 
@@ -81,12 +94,18 @@ def schedule_chat_lifecycle_events(
     output: list[dict[str, Any]],
     content: str,
     started_at: float,
+    form_data: dict[str, Any] | None = None,
+    usage: dict[str, Any] | None = None,
 ) -> None:
     """Emit vertical chat lifecycle events from native completion output.
 
     Open WebUI owns the streaming state machine. The vertical only observes the
     finalized OR-style output items, so the core middleware hook stays tiny and
     cannot slow per-token streaming.
+
+    ``form_data`` (the resolved request) and ``usage`` (token counts) are passed
+    so we can emit a durable input snapshot for interaction replay (Phase 0). All
+    extraction happens here in vertical code; the middleware hook only forwards.
     """
     if not _is_data_analysis_context(metadata):
         return
@@ -95,6 +114,18 @@ def schedule_chat_lifecycle_events(
     message_id = metadata.get('message_id')
     duration_ms = int((time.perf_counter() - started_at) * 1000)
     reasoning_events = _reasoning_events_from_output(output, content)
+
+    # Input snapshot — "what the model received" (request_prepared). Emitted first
+    # so the trajectory reads request -> tool.* -> assistant_completed in order.
+    if form_data is not None:
+        snapshot = _build_request_snapshot(form_data, metadata)
+        schedule_log_event(
+            event_type='model.request_prepared',
+            user_id=user_id,
+            chat_id=chat_id,
+            message_id=message_id,
+            payload=snapshot,
+        )
 
     for event in reasoning_events:
         schedule_log_event(
@@ -109,20 +140,65 @@ def schedule_chat_lifecycle_events(
             duration_ms=event['duration_ms'],
         )
 
+    assistant_payload = {
+        'message_id': message_id,
+        'total_duration_ms': duration_ms,
+        'tool_call_count': _count_output_items(output, 'function_call'),
+        'n_chars': len(_visible_text_from_output(output, content)),
+        'had_thinking': bool(reasoning_events),
+    }
+    token_usage = _curate_usage(usage)
+    if token_usage:
+        assistant_payload['usage'] = token_usage
+
     schedule_log_event(
         event_type='message.assistant_completed',
         user_id=user_id,
         chat_id=chat_id,
         message_id=message_id,
-        payload={
-            'message_id': message_id,
-            'total_duration_ms': duration_ms,
-            'tool_call_count': _count_output_items(output, 'function_call'),
-            'n_chars': len(_visible_text_from_output(output, content)),
-            'had_thinking': bool(reasoning_events),
-        },
+        payload=assistant_payload,
         duration_ms=duration_ms,
+        schema_version=2,  # D5: payload gained `usage`
     )
+
+
+def _build_request_snapshot(form_data: dict[str, Any], metadata: dict[str, Any]) -> dict[str, Any]:
+    """Durable snapshot of the model input (D1/D3/D4).
+
+    Captures the resolved system prompt (incl. the ephemeral [Workspace context]),
+    model id, curated params, and tool_ids — enough to faithfully replay the turn.
+    """
+    messages = form_data.get('messages') or []
+    system_prompt = ''
+    for message in messages:
+        if isinstance(message, dict) and message.get('role') == 'system':
+            system_prompt = _text_from_parts(message.get('content', ''))
+            break
+
+    raw_params = metadata.get('params') or {}
+    params = {k: raw_params[k] for k in _SNAPSHOT_PARAM_KEYS if k in raw_params}
+
+    tool_ids = metadata.get('tool_ids') or form_data.get('tool_ids') or []
+
+    return {
+        'model': form_data.get('model', ''),
+        'params': params,
+        'tool_ids': tool_ids,
+        'system_prompt': system_prompt,
+        'system_prompt_sha256': hashlib.sha256(system_prompt.encode('utf-8')).hexdigest()
+        if system_prompt
+        else None,
+        'message_count': len(messages),
+    }
+
+
+def _curate_usage(usage: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Keep only the standard token-count fields from a usage object."""
+    if not isinstance(usage, dict):
+        return None
+    keys = ('prompt_tokens', 'completion_tokens', 'total_tokens')
+    curated = {k: usage[k] for k in keys if k in usage}
+    return curated or None
 
 
 def _is_data_analysis_context(metadata: dict[str, Any]) -> bool:
