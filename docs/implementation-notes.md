@@ -156,6 +156,32 @@ CanvasFeed → page → `chart.viewed` ledger event. Deduped per chart id in loc
 (`markChartViewedOnce`), so reloads don't re-count. Added to the frontend whitelist.
 `followup.clicked` (already P0) is the other engagement signal.
 
+---
+
+# Phase 4 — Close the loop
+
+### D15. Pure analytics + a CLI, not a live dashboard
+`analytics.summarize_trajectories` / `summarize_replay_reports` are pure functions
+(testable). `replay_cli.py` exposes `export` / `regression` / `report`. `regression`
+exits non-zero when any replayable action diverged → drop-in CI gate. A live dashboard
+is left as a consumer of these (out of scope).
+
+### D16. Replayability is version-gated — old trajectories are "not replayable", not "failed"
+Live regression first reported 6 "divergences" — but they were charts created BEFORE
+Phase 0 added x/y to the ledger, so replay literally lacked the args. Fixed
+`replay_trajectory` to classify renders with no recorded x/y as `replay_success=None`
+(not-replayable) instead of a false failure. **Takeaway (and the point of Phase 1
+version stamps):** only replay trajectories whose `tool_spec_version` / event schema
+includes what replay needs. After the fix: live data = 10 replayable, 10 matches, 0
+diverged, `passed: true`.
+
+### Live loop verified (2026-05-26 data)
+`report` over 6 real chats: 26 tool calls, 4 failures clustered as
+`VALUE×2` (the count-column issue), `DATASETNOTFOUND×1` (wrong-name guess),
+`QUERY_ID_NOT_FOUND×1` (restart-expiry). `total_tokens: 0` (MiniMax omits usage),
+`charts_viewed: 0` (chart.viewed is new — no events yet). This is exactly the
+enhancement signal the whole effort was for.
+
 ## Things to know / follow-ups
 - Snapshot links to the rest of a turn via `chat_id` + `message_id` (same correlation
   the other lifecycle events use). A full trajectory = request_prepared → tool.* →

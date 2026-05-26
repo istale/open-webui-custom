@@ -136,6 +136,13 @@ def replay_trajectory(traj: dict[str, Any], repo, user_id: str = 'replay') -> di
                     entry.update(replay_success=True, replayed_query_id=new_qid)
 
                 elif et.startswith('tool.render_chart'):
+                    # Pre-Phase-0 renders didn't record x/y, so they can't be
+                    # faithfully replayed — classify as not-replayable (not diverged)
+                    # rather than forcing a false failure on old trajectories.
+                    if not args.get('x') and not args.get('y'):
+                        entry.update(replay_success=None, note='render args (x/y) not recorded')
+                        results.append(entry)
+                        continue
                     rec_qid = args.get('query_id') or (action.get('result') or {}).get('query_id')
                     qid = query_id_map.get(rec_qid, rec_qid)
                     tools.render_chart(
