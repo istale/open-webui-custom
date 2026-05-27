@@ -196,6 +196,44 @@ and `chart.viewed` incrementing.
 new-chat index route carry `chat_id=null` (the page handler there has no chat id yet);
 chart_id is in the payload so trajectories still attach them correctly.
 
+# Phase 5 — LLM-in-the-loop eval
+
+### D18. The agentic tool-call LOOP, not a single completion
+The spec draft said "one live LLM call". That's wrong for tool use: the model can't
+emit `render_chart(query_id=…)` until it has seen the `query_dataset` result. So
+`run_candidate` runs a **bounded loop** (`MAX_STEPS=6`): call model → execute any tool
+calls deterministically against the in-memory repo → feed results back as `role:tool`
+messages → repeat until a final message (or cap). Only the model calls are
+non-deterministic; tool execution is reproducible.
+
+### D19. `complete` is dependency-injected (testable without a network/key)
+`run_candidate(case, repo, *, complete=…)` takes the provider step fn as a parameter;
+the default wired in the CLI is `llm_client.complete`. Tests pass a stateful fake that
+reads the running `messages` to chain on the live `query_id`/chart url — so the whole
+loop + scoring is verified offline. `llm_client.py` is the ONLY vertical module doing
+live LLM I/O (aiohttp, OpenAI-compatible, MINIMAX_* env).
+
+### D20. Baseline signals come from the ledger; some checks are candidate-only
+Scoring compares candidate vs the recorded turn. The ledger has recorded tool
+success/ordering (so `used_tools`/`resolved_dataset`/`render_succeeded`/
+`tool_workflow_ok` have a baseline), but NOT the recorded final answer text, so
+`embedded_real_url` and `recovered_query_id` have **no baseline** → verdict
+`candidate_only` (informational, never a regression). A check regresses only when
+baseline=True and candidate=False. `summarize_eval_reports` fails the gate on any
+regression OR any errored run.
+
+### D21. render url lives at `result.attachment.url`, not `result.url`
+`render_chart` returns the image url nested under `attachment.url` (with a flat-`url`
+fallback tolerated). The `embedded_real_url` check reads it from there. (Caught in
+verification — first pass looked at a flat `url` and scored `embedded_real_url=None`.)
+
+### D22. CLI `eval` candidate prompt via file, `--prompt-version` is just a label
+The system prompt is authored frontend-side (`system-prompt.ts`), so the CLI can't
+synthesize "prompt v4" from a version string. `eval` takes `--candidate-prompt-file`
+for the actual candidate text (omit → re-use each case's recorded prompt, i.e. a
+model/params-only A/B). `--prompt-version`/`--model` are tagged onto the verdict for
+provenance. Exits non-zero on regression → A/B gate.
+
 ## Things to know / follow-ups
 - Snapshot links to the rest of a turn via `chat_id` + `message_id` (same correlation
   the other lifecycle events use). A full trajectory = request_prepared → tool.* →
