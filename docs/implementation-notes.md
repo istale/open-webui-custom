@@ -234,6 +234,36 @@ for the actual candidate text (omit → re-use each case's recorded prompt, i.e.
 model/params-only A/B). `--prompt-version`/`--model` are tagged onto the verdict for
 provenance. Exits non-zero on regression → A/B gate.
 
+# Phase 6 — Few-shot mining
+
+### D23. `final_answer` is unavailable — the ledger stores n_chars, not answer text
+An exemplar would ideally carry `request -> tool sequence -> final answer`, but the
+ledger only records `message.assistant_completed.n_chars`, never the assistant prose.
+So `final_answer` is `None` in every exemplar. Acceptable: the teaching signal is the
+**ideal tool sequence** (exact SQL + chart args), and the final prose is mostly "here
+is the chart ![](url)". Documented like the render-caption gap (D11). If answer text
+ever matters, it'd need a new capture (out of scope).
+
+### D24. Exemplars teach the CLEAN path — failed attempts dropped
+`_ideal_tool_sequence` keeps only `success=True` actions. A turn that failed a render
+once then recovered (rule 5) still qualifies (single-recovery is exemplary), but the
+exemplar shows only the successful query+render — we don't want to teach the model the
+mistake, just the fix. Thrashing (>1 failure) disqualifies the whole turn.
+
+### D25. Selection gates reuse Phase 1–3 signals; no new capture
+Mining is a **pure** function over exported trajectory dicts: reward via the Phase 3
+feedback overlay (thumbs-down hard-excludes), still-works via optional Phase 2
+`replay_reports` (chat must have passed), version-gate via Phase 1 stamps (D16
+discipline), then diversity (`per_cluster` per `(chart_type, dataset)`) + content-hash
+dedup. No core touch, no DB writes — `mine` just reads the ledger via `export`.
+
+### D26. Closing the loop: `eval --fewshot` injects the bank as a system-prompt suffix
+`run_candidate` gained `system_suffix`; `format_fewshot_block` renders the bank to
+appendable text. So Phase 6 produces the bank and Phase 5 eval is its acceptance test
+(score with-vs-without injection) — exactly the with/without gate the spec describes.
+Live injection into `buildDataAnalysisSystemPrompt` is deliberately NOT wired yet
+(offline artifact first, per the locked decision).
+
 ## Things to know / follow-ups
 - Snapshot links to the rest of a turn via `chat_id` + `message_id` (same correlation
   the other lifecycle events use). A full trajectory = request_prepared → tool.* →

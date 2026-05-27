@@ -77,6 +77,13 @@ async def _cmd_eval(args) -> int:
         with open(args.candidate_prompt_file, encoding='utf-8') as fh:
             candidate_system = fh.read()
 
+    system_suffix = None
+    if args.fewshot:
+        from open_webui.utils.data_analysis.fewshot import format_fewshot_block
+
+        with open(args.fewshot, encoding='utf-8') as fh:
+            system_suffix = format_fewshot_block(json.load(fh))
+
     trajs = await export_trajectories(since_ts=_since_ts(args.since_days))
     repo = get_repository()
 
@@ -89,6 +96,7 @@ async def _cmd_eval(args) -> int:
                 complete=complete,
                 candidate_system=candidate_system,
                 candidate_model=args.model,
+                system_suffix=system_suffix,
             )
             reports.append(score_candidate(_case_dict(case), _run_dict(run)))
 
@@ -97,6 +105,25 @@ async def _cmd_eval(args) -> int:
     verdict['model'] = args.model
     print(json.dumps(verdict, indent=2, ensure_ascii=False))
     return 0 if verdict['passed'] else 1
+
+
+async def _cmd_mine(args) -> int:
+    from open_webui.utils.data_analysis.fewshot import mine_fewshot
+    from open_webui.utils.data_analysis.replay import export_trajectories
+
+    trajs = await export_trajectories(since_ts=_since_ts(args.since_days), redact=args.redact)
+    bank = mine_fewshot(
+        trajs,
+        current_prompt_version=args.prompt_version,
+        current_tool_spec_version=args.tool_spec_version,
+        per_cluster=args.per_cluster,
+        max_examples=args.max,
+        redact=args.redact,
+    )
+    with open(args.out, 'w', encoding='utf-8') as fh:
+        json.dump(bank, fh, ensure_ascii=False, indent=2, default=str)
+    print(f'mined {len(bank)} few-shot exemplars -> {args.out}')
+    return 0
 
 
 def _case_dict(case) -> dict:
@@ -124,7 +151,17 @@ def main(argv: list[str] | None = None) -> int:
     p_eval.add_argument('--prompt-version', default=None, help='label for the candidate prompt version')
     p_eval.add_argument('--candidate-prompt-file', default=None, help='file with the candidate system prompt')
     p_eval.add_argument('--model', default=None, help='candidate model id (defaults to recorded/env model)')
+    p_eval.add_argument('--fewshot', default=None, help='few-shot bank JSON to inject (Phase 6 validation)')
     p_eval.set_defaults(func=_cmd_eval)
+
+    p_mine = sub.add_parser('mine')
+    p_mine.add_argument('--out', default='fewshot_bank.json')
+    p_mine.add_argument('--prompt-version', default=None, help='version-gate to this prompt version')
+    p_mine.add_argument('--tool-spec-version', default=None, help='version-gate to this tool spec version')
+    p_mine.add_argument('--per-cluster', type=int, default=2, help='max exemplars per (chart_type, dataset)')
+    p_mine.add_argument('--max', type=int, default=None, help='cap total exemplars')
+    p_mine.add_argument('--redact', action='store_true')
+    p_mine.set_defaults(func=_cmd_mine)
 
     args = parser.parse_args(argv)
     return asyncio.run(args.func(args))

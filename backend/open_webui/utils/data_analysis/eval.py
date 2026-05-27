@@ -164,6 +164,7 @@ async def run_candidate(
     candidate_system: str | None = None,
     candidate_model: str | None = None,
     params: dict[str, Any] | None = None,
+    system_suffix: str | None = None,
     user_id: str = 'eval',
 ) -> CandidateRun:
     """Drive a bounded agentic tool-call loop for one eval case.
@@ -177,6 +178,8 @@ async def run_candidate(
     tools = _make_tools(repo)
     user = {'id': user_id}
     system = candidate_system if candidate_system is not None else case.system_prompt
+    if system_suffix:
+        system = f'{system}\n{system_suffix}'
     model = candidate_model if candidate_model is not None else case.model
     params = params if params is not None else case.params
 
