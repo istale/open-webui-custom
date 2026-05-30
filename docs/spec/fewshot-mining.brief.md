@@ -43,8 +43,9 @@ Free-text redactable; tool-arg structure is the signal. Deduped by content hash.
 
 ## CLI
 ```
-replay_cli mine --out fewshot_bank.json [--max N] [--min-reward ..] [--redact]
-replay_cli eval --fewshot fewshot_bank.json --since-days N      # the gate
+replay_cli [--since-days N] mine --out fewshot_bank.json \
+  [--prompt-version V] [--tool-spec-version V] [--per-cluster N] [--max N] [--redact]
+replay_cli --since-days N eval --fewshot fewshot_bank.json      # the gate
 ```
 
 ---

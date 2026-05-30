@@ -71,13 +71,16 @@ This is why Phase 5 is sequenced first: without it, few-shot mining is unfalsifi
 ## 6. CLI
 
 ```
-# 1. mine the bank
-python -m open_webui.utils.data_analysis.replay_cli mine \
-    --out fewshot_bank.json [--max N] [--min-reward ...] [--redact]
+# 1. mine the bank (version-gate to current prompt/tool versions strongly recommended)
+python -m open_webui.utils.data_analysis.replay_cli [--since-days N] mine \
+    --out fewshot_bank.json \
+    [--prompt-version da-sys-YYYY-MM-DD] \
+    [--tool-spec-version da-tools-YYYY-MM-DD] \
+    [--per-cluster N] [--max N] [--redact]
 
 # 2. validate it improves scores (Phase 5)
-python -m open_webui.utils.data_analysis.replay_cli eval \
-    --fewshot fewshot_bank.json --since-days 30
+python -m open_webui.utils.data_analysis.replay_cli --since-days 30 eval \
+    --fewshot fewshot_bank.json
 ```
 
 `mine` is pure selection + formatting; the eval step is the gate that decides whether

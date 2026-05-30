@@ -85,10 +85,13 @@ remapped to freshly-produced ones.
 - `analytics.summarize_trajectories(...)` → failure clustering (by error_code /
   chart_type), self-correction (in-turn retry) rate, chart view-through, token totals.
   `summarize_replay_reports(...)` → a pass/fail regression verdict.
-- `replay_cli.py`: `export`, `regression` (exits non-zero on divergence → CI gate),
-  `report`. Run from `backend/`:
+- `replay_cli.py`: five subcommands — `export`, `regression` (exits non-zero on
+  divergence → CI gate), `report`, plus `eval` (Phase 5, see
+  [`llm-eval.md`](./llm-eval.md)) and `mine` (Phase 6, see
+  [`fewshot-mining.md`](./fewshot-mining.md)). Run from `backend/` — the global
+  `--since-days N` window goes BEFORE the subcommand:
   ```
-  python -m open_webui.utils.data_analysis.replay_cli report
+  python -m open_webui.utils.data_analysis.replay_cli --since-days 30 report
   python -m open_webui.utils.data_analysis.replay_cli regression
   python -m open_webui.utils.data_analysis.replay_cli export --out t.jsonl --redact
   ```

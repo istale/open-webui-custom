@@ -90,12 +90,15 @@ a follow-up so token cost and non-determinism are opt-in.
 ## 6. CLI
 
 ```
-python -m open_webui.utils.data_analysis.replay_cli eval \
-    --prompt-version da-sys-XXXX        # candidate prompt template
-    --model MiniMax-MX                  # or candidate model
-    --since-days 30
-    [--redact]
+python -m open_webui.utils.data_analysis.replay_cli --since-days 30 eval \
+    [--prompt-version da-sys-XXXX]      # label for the candidate prompt version
+    [--candidate-prompt-file FILE]      # actual candidate system prompt text
+    [--model MiniMax-MX]                # candidate model id (defaults to recorded/env)
+    [--fewshot fewshot_bank.json]       # Phase 6 validation: inject a mined bank
 ```
+
+(`--since-days` is the global retention window — it goes BEFORE the subcommand.
+Redaction is an export/mine flag; `eval` doesn't persist text, only scores.)
 
 Prints per-case baseline-vs-candidate diffs and an aggregate verdict (mirrors
 `summarize_replay_reports`). **Exits non-zero if the candidate regresses on any

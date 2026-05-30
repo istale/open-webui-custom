@@ -1,20 +1,35 @@
-"""CLI to close the interaction-replay loop (Phase 4).
+"""CLI to close the interaction-replay loop (Phase 4 / 5 / 6).
 
-Run from the backend dir:
+Run from the backend dir (the global `--since-days N` flag goes BEFORE the
+subcommand):
 
-    python -m open_webui.utils.data_analysis.replay_cli export    --out traj.jsonl [--since-days N] [--redact]
-    python -m open_webui.utils.data_analysis.replay_cli regression [--since-days N]
-    python -m open_webui.utils.data_analysis.replay_cli report     [--since-days N]
-    python -m open_webui.utils.data_analysis.replay_cli eval       [--prompt-version V] [--model M] [--since-days N]
+    python -m open_webui.utils.data_analysis.replay_cli [--since-days N] <subcmd> [opts]
 
-- export:     write trajectory records (one JSON object per line) for eval/training.
-- regression: replay every trajectory's recorded tool calls deterministically and
-              diff vs. recorded outcomes; exit code 1 if anything diverged (CI gate).
-- report:     print aggregate analytics (failure clustering, retry rate, etc.).
-- eval:       LLM-in-the-loop — re-run each evaluable single-turn case's input against
-              a candidate prompt/model and score vs. the recorded baseline; exit code 1
-              if the candidate regresses any rule-based check (A/B gate). Needs a live
-              endpoint (MINIMAX_BASE_URL / MINIMAX_API_KEY).
+Subcommands:
+- export     [--out trajectories.jsonl] [--redact]
+             Write trajectory records (one JSON object per line) for downstream
+             eval/training. Honours soft-delete + retention window + redaction.
+
+- regression
+             Replay every trajectory's recorded tool calls deterministically and
+             diff vs. recorded outcomes. Exit code 1 if anything diverged (CI gate).
+
+- report     Print aggregate analytics over trajectories: failure clustering by
+             error_code / chart_type, self-correction (retry) rate, token totals,
+             chart view-through rate, reward distribution.
+
+- eval       [--prompt-version V] [--candidate-prompt-file F] [--model M] [--fewshot BANK.json]
+             LLM-in-the-loop (Phase 5) — re-run each evaluable single-turn case's
+             input against a candidate prompt / model / few-shot bank and score
+             vs. the recorded baseline (rule-based checks). Exit code 1 if the
+             candidate regresses any check (A/B gate). Needs a live endpoint:
+             MINIMAX_BASE_URL / MINIMAX_API_KEY in env.
+
+- mine       [--out fewshot_bank.json] [--prompt-version V] [--tool-spec-version V]
+             [--per-cluster N] [--max N] [--redact]
+             Few-shot mining (Phase 6) — select exemplary trajectories (reward /
+             cleanliness gate, version-gate, diversity + dedup) and write a curated
+             few-shot bank. Validate the bank by piping it back into `eval --fewshot`.
 """
 
 from __future__ import annotations

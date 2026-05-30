@@ -37,9 +37,11 @@ Only the single LLM call is non-deterministic; everything after is deterministic
 - `replay_cli.py eval` — CLI; **non-zero exit on regression** → A/B gate.
 
 ```
-python -m open_webui.utils.data_analysis.replay_cli eval \
-  --prompt-version da-sys-XXXX --model Y [--since-days N] [--redact]
+python -m open_webui.utils.data_analysis.replay_cli [--since-days N] eval \
+  [--prompt-version V] [--candidate-prompt-file F] [--model M] [--fewshot bank.json]
 ```
+`--since-days` (global) goes BEFORE the subcommand. `eval` has no `--redact` —
+it produces scores, not persisted text.
 
 ---
 

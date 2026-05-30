@@ -36,10 +36,13 @@ Correlation: turn = events sharing `message_id`; prompt paired by ts; chart even
 - `trajectory.py` — `build_trajectory(events)` (pure, ledger-only) → `Trajectory`; `load_trajectory(chat_id)`; `attach_feedback(traj, feedbacks)`.
 - `replay.py` — `export_trajectories(since_ts, redact, include_deleted, with_feedback)`; `replay_trajectory(traj, repo)` (deterministic tool re-exec vs recorded outcome).
 - `analytics.py` — `summarize_trajectories(...)`, `summarize_replay_reports(...)`.
-- `replay_cli.py` — `export` / `regression` (CI gate, non-zero on divergence) / `report`.
+- `replay_cli.py` — `export` / `regression` (CI gate) / `report`, plus `eval` (Phase 5,
+  see [`llm-eval.brief.md`](./llm-eval.brief.md)) and `mine` (Phase 6, see
+  [`fewshot-mining.brief.md`](./fewshot-mining.brief.md)). `--since-days N` goes
+  BEFORE the subcommand.
 
 ```
-python -m open_webui.utils.data_analysis.replay_cli report [--since-days N]
+python -m open_webui.utils.data_analysis.replay_cli --since-days 30 report
 python -m open_webui.utils.data_analysis.replay_cli regression
 python -m open_webui.utils.data_analysis.replay_cli export --out t.jsonl [--redact]
 ```
