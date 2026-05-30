@@ -68,11 +68,33 @@ async def export_trajectories(
             include_deleted=include_deleted, since_ts=since_ts
         )
 
-    out: list[dict[str, Any]] = []
+    # New-chat `prompt.submitted` (and `chart.*`) fire before chat_id exists, so
+    # they land chat-less. Pair each orphan to the chat whose first event lands
+    # within ORPHAN_PAIR_WINDOW_MS after the orphan ts (forward-nearest).
+    ORPHAN_PAIR_WINDOW_MS = 120_000  # 2 minutes is generous; first turn rarely takes longer
+    orphans = await DataAnalysisEvents.list_orphan_events(
+        ['prompt.submitted', 'chart.rendered', 'chart.viewed'], since_ts=since_ts
+    )
+    chat_events: dict[str, list] = {}
+    chat_first_ts: dict[str, int] = {}
     for cid in chat_ids:
-        events = await DataAnalysisEvents.list_events_by_chat_id(cid, include_deleted=include_deleted)
-        if not events:
+        evs = await DataAnalysisEvents.list_events_by_chat_id(cid, include_deleted=include_deleted)
+        if not evs:
             continue
+        chat_events[cid] = evs
+        chat_first_ts[cid] = min(e.ts for e in evs)
+    for orphan in orphans:
+        best = None
+        best_gap = None
+        for cid, ts0 in chat_first_ts.items():
+            gap = ts0 - orphan.ts
+            if 0 <= gap <= ORPHAN_PAIR_WINDOW_MS and (best_gap is None or gap < best_gap):
+                best, best_gap = cid, gap
+        if best is not None:
+            chat_events[best].append(orphan)
+
+    out: list[dict[str, Any]] = []
+    for cid, events in chat_events.items():
         d = build_trajectory(events).to_dict()
         if with_feedback:
             try:

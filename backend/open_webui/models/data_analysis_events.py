@@ -100,6 +100,30 @@ class DataAnalysisEventsTable:
                     seen[cid] = None
             return list(seen.keys())
 
+    async def list_orphan_events(
+        self,
+        event_types: list[str],
+        since_ts: Optional[int] = None,
+        db: Optional[AsyncSession] = None,
+    ) -> list[DataAnalysisEventModel]:
+        """Events of the given types that have NO chat_id (chat_id IS NULL).
+
+        New-chat `prompt.submitted` fires before the chat row exists, so the event
+        lands chat-less; export pairs it back to a chat by ts proximity. Same gap
+        applies to `chart.rendered`/`chart.viewed` from the new-chat index route.
+        """
+        async with get_async_db_context(db) as db:
+            stmt = select(DataAnalysisEvent).where(
+                DataAnalysisEvent.chat_id.is_(None),
+                DataAnalysisEvent.event_type.in_(event_types),
+                DataAnalysisEvent.is_deleted.is_(False),
+            )
+            if since_ts is not None:
+                stmt = stmt.where(DataAnalysisEvent.ts >= since_ts)
+            stmt = stmt.order_by(DataAnalysisEvent.ts.asc(), DataAnalysisEvent.id.asc())
+            result = await db.execute(stmt)
+            return [DataAnalysisEventModel.model_validate(row) for row in result.scalars().all()]
+
     async def mark_deleted(self, chat_id: str, db: Optional[AsyncSession] = None) -> int:
         deleted_at = int(time.time() * 1000)
         async with get_async_db_context(db) as db:
