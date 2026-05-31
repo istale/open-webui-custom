@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Pre-push gate for vertical/data-analysis:
+#   1. data-analysis unit tests must pass
+#   2. trajectory regression (deterministic tool re-execution) must pass
+#
+# Both are offline / deterministic — no network, no LLM, no DB writes.
+# Skip only with --no-verify (avoid).
+
+set -e
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+PY="/Users/istale/Documents/New project/repos/open-webui/.venv/bin/python"
+
+if [[ ! -x "$PY" ]]; then
+  echo "[pre-push] venv python not found at: $PY" >&2
+  echo "[pre-push] (CLAUDE.md documents the working venv path.)" >&2
+  exit 1
+fi
+
+echo "[pre-push] (1/2) pytest tests/data_analysis/ ..."
+cd "$REPO_ROOT"
+"$PY" -m pytest tests/data_analysis/ -q
+
+echo "[pre-push] (2/2) replay_cli regression ..."
+cd "$REPO_ROOT/backend"
+if [[ -f "$REPO_ROOT/.env" ]]; then
+  set -a && . "$REPO_ROOT/.env" && set +a
+fi
+PYTHONPATH=. "$PY" -m open_webui.utils.data_analysis.replay_cli regression \
+  | tail -20
+
+echo "[pre-push] ok — pushing."
