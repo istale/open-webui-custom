@@ -25,6 +25,23 @@ Subcommands:
              candidate regresses any check (A/B gate). Needs a live endpoint:
              MINIMAX_BASE_URL / MINIMAX_API_KEY in env.
 
+Stage 2 user-signal analysis (read existing ledger; no new capture):
+
+- intents    [--top N]
+             Cluster user prompts by skeleton (identifiers/numbers masked) and
+             surface what people actually ask + per-cluster dataset/chart/outcome
+             distribution. The "what to change" lens for prompt iteration.
+
+- satisfaction
+             Proxy satisfaction signals when thumbs are sparse: chart view-through,
+             follow-up click rate, multi-turn rate, avg turns per chat.
+
+- fit        Did the rendered chart_type match the intent verb in the prompt
+             (e.g. 趨勢 → line/control, 分布 → box/histogram)? Lists mismatch
+             samples for human review.
+
+Stage 3 prompt iteration:
+
 - mine       [--out fewshot_bank.json] [--prompt-version V] [--tool-spec-version V]
              [--per-cluster N] [--max N] [--redact]
              Few-shot mining (Phase 6) — select exemplary trajectories (reward /
@@ -122,6 +139,33 @@ async def _cmd_eval(args) -> int:
     return 0 if verdict['passed'] else 1
 
 
+async def _cmd_intents(args) -> int:
+    from open_webui.utils.data_analysis.intents import summarize_intents
+    from open_webui.utils.data_analysis.replay import export_trajectories
+
+    trajs = await export_trajectories(since_ts=_since_ts(args.since_days))
+    print(json.dumps(summarize_intents(trajs, top=args.top), indent=2, ensure_ascii=False))
+    return 0
+
+
+async def _cmd_satisfaction(args) -> int:
+    from open_webui.utils.data_analysis.replay import export_trajectories
+    from open_webui.utils.data_analysis.satisfaction import summarize_satisfaction
+
+    trajs = await export_trajectories(since_ts=_since_ts(args.since_days))
+    print(json.dumps(summarize_satisfaction(trajs), indent=2, ensure_ascii=False))
+    return 0
+
+
+async def _cmd_fit(args) -> int:
+    from open_webui.utils.data_analysis.fit import summarize_fit
+    from open_webui.utils.data_analysis.replay import export_trajectories
+
+    trajs = await export_trajectories(since_ts=_since_ts(args.since_days))
+    print(json.dumps(summarize_fit(trajs), indent=2, ensure_ascii=False))
+    return 0
+
+
 async def _cmd_mine(args) -> int:
     from open_webui.utils.data_analysis.fewshot import mine_fewshot
     from open_webui.utils.data_analysis.replay import export_trajectories
@@ -168,6 +212,14 @@ def main(argv: list[str] | None = None) -> int:
     p_eval.add_argument('--model', default=None, help='candidate model id (defaults to recorded/env model)')
     p_eval.add_argument('--fewshot', default=None, help='few-shot bank JSON to inject (Phase 6 validation)')
     p_eval.set_defaults(func=_cmd_eval)
+
+    p_intents = sub.add_parser('intents', help='Stage 2: what users actually ask (skeleton clustering)')
+    p_intents.add_argument('--top', type=int, default=20)
+    p_intents.set_defaults(func=_cmd_intents)
+
+    sub.add_parser('satisfaction', help='Stage 2: proxy satisfaction signals').set_defaults(func=_cmd_satisfaction)
+
+    sub.add_parser('fit', help='Stage 2: did chart_type match intent verb?').set_defaults(func=_cmd_fit)
 
     p_mine = sub.add_parser('mine')
     p_mine.add_argument('--out', default='fewshot_bank.json')

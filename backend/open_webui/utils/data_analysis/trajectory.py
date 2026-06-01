@@ -80,7 +80,16 @@ _RESULT_KEYS = (
     'statistics',
     'error_message',
 )
-_SESSION_EVENT_TYPES = ('workspace.opened', 'dataset.selected', 'stream.timeout', 'stream.aborted')
+_SESSION_EVENT_TYPES = (
+    'workspace.opened',
+    'dataset.selected',
+    'stream.timeout',
+    'stream.aborted',
+    # Engagement signal that has chat_id but no message_id — without listing it here it
+    # would fall through the `if not mid: continue` path and be silently dropped.
+    # Stage 2 satisfaction analysis (replay_cli satisfaction) reads it from session_events.
+    'followup.clicked',
+)
 
 
 def _as_dict(event: Any) -> dict[str, Any]:
