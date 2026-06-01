@@ -141,6 +141,24 @@ The setup wizard needs **Python 3.11 or 3.12**. It looks in three places, in ord
 So you only need to **either** add Python's directory to `PATH`, **or** point
 `PY` at the binary. You do not have to clean up the rest of `PATH`.
 
+### Custom-compiled Python at an unusual path
+
+Two options, both work without touching `PATH`:
+
+```bash
+# Option 1 — point the wizard directly at your binary (one-shot):
+PY=/your/custom/path/to/python3.12 ./scripts/offline-setup.sh
+
+# Option 2 — tell the discovery search to ALSO look in your custom dir
+# (colon-separated, can list multiple). Useful if you want find-python.sh
+# to surface it too, or you want it found automatically next time:
+PY_EXTRA_DIRS=/opt/mypython/bin:/data/python-3.12/bin ./scripts/offline-setup.sh
+PY_EXTRA_DIRS=/opt/mypython/bin ./scripts/find-python.sh    # also accepted
+```
+
+Both `PY=` and `PY_EXTRA_DIRS=` are honoured by `offline-setup.sh`; only
+`PY_EXTRA_DIRS=` matters for `find-python.sh` (which is read-only).
+
 ### If you're not sure where Python lives
 
 Run the discovery helper — it scans PATH + all common install locations and

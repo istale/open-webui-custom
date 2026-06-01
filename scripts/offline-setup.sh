@@ -81,6 +81,11 @@ if [[ -z "$CHOSEN" ]]; then
     /opt/anaconda3/bin /opt/miniconda3/bin /opt/miniforge3/bin
     "$HOME/.local/share/uv/python"
   )
+  # Allow caller to add custom-compiled python locations (colon-separated).
+  if [[ -n "${PY_EXTRA_DIRS:-}" ]]; then
+    IFS=':' read -r -a _PY_EXTRA <<< "$PY_EXTRA_DIRS"
+    EXTRA_DIRS=("${_PY_EXTRA[@]}" "${EXTRA_DIRS[@]}")
+  fi
   # globs for pyenv / uv style nested layouts
   CANDIDATES=()
   for d in "${EXTRA_DIRS[@]}"; do

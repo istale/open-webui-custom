@@ -15,6 +15,10 @@ echo "== Python interpreters discovered =="
 echo ""
 
 # Build a candidate list from PATH + common off-PATH locations.
+# Extra dirs can be added via PY_EXTRA_DIRS env var (colon-separated), useful
+# when Python lives at a custom-compiled path that the default list misses.
+# Example:
+#   PY_EXTRA_DIRS=/opt/mypython/bin:/data/python-3.12/bin ./scripts/find-python.sh
 EXTRA_DIRS=(
   /usr/bin /usr/local/bin
   /opt/homebrew/bin
@@ -25,6 +29,10 @@ EXTRA_DIRS=(
   /opt/anaconda3/bin /opt/miniconda3/bin /opt/miniforge3/bin
   "$HOME/.local/share/uv/python"
 )
+if [[ -n "${PY_EXTRA_DIRS:-}" ]]; then
+  IFS=':' read -r -a EXTRA <<< "$PY_EXTRA_DIRS"
+  EXTRA_DIRS=("${EXTRA[@]}" "${EXTRA_DIRS[@]}")
+fi
 
 # macOS ships bash 3.2 — no associative arrays. Track seen paths via a delimited
 # string, and remember resolved paths for the final recommendation pass.
