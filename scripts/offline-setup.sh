@@ -23,22 +23,99 @@ PIP_OPTS=()
 
 echo "[setup] repo: $REPO_ROOT"
 echo "[setup] (1/7) checking python ..."
-# Prefer python3.12, then 3.11.
-PY=""
-for candidate in python3.12 python3.11 python3; do
-  if command -v "$candidate" >/dev/null 2>&1; then
-    ver="$("$candidate" -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
-    if [[ "$ver" == "3.12" || "$ver" == "3.11" ]]; then
-      PY="$candidate"
-      echo "[setup]   using $candidate (python $ver)"
+# Priority:
+#   1. $PY env var (caller knows best)
+#   2. python3.12 / python3.11 / python3 on PATH
+#   3. common install locations that may NOT be on PATH (Homebrew, conda envs,
+#      pyenv shims, uv-managed pythons, official mac installer, opt/, /usr/local)
+#
+# If your python is somewhere else: run `./scripts/find-python.sh` to discover
+# candidates, then `PY=/abs/path/to/python ./scripts/offline-setup.sh`.
+
+_check_python() {
+  local p="$1"
+  [[ -x "$p" ]] || return 1
+  local ver
+  ver="$("$p" -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null)" || return 1
+  [[ "$ver" == "3.12" || "$ver" == "3.11" ]] || return 1
+  echo "$ver"
+}
+
+CHOSEN=""
+CHOSEN_VER=""
+
+# (1) explicit override
+if [[ -n "${PY:-}" ]]; then
+  if ver="$(_check_python "$PY")"; then
+    CHOSEN="$PY"; CHOSEN_VER="$ver"
+    echo "[setup]   using \$PY override: $PY (python $ver)"
+  else
+    echo "[setup] ERROR: \$PY=$PY is not python 3.11 / 3.12 or not executable." >&2
+    exit 1
+  fi
+fi
+
+# (2) PATH
+if [[ -z "$CHOSEN" ]]; then
+  for candidate in python3.12 python3.11 python3; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+      p="$(command -v "$candidate")"
+      if ver="$(_check_python "$p")"; then
+        CHOSEN="$p"; CHOSEN_VER="$ver"
+        echo "[setup]   found on PATH: $p (python $ver)"
+        break
+      fi
+    fi
+  done
+fi
+
+# (3) common install locations that aren't necessarily on PATH
+if [[ -z "$CHOSEN" ]]; then
+  EXTRA_DIRS=(
+    /usr/bin /usr/local/bin
+    /opt/homebrew/bin
+    /Library/Frameworks/Python.framework/Versions/3.12/bin
+    /Library/Frameworks/Python.framework/Versions/3.11/bin
+    "$HOME/.pyenv/versions"
+    "$HOME/anaconda3/bin" "$HOME/miniconda3/bin" "$HOME/miniforge3/bin"
+    /opt/anaconda3/bin /opt/miniconda3/bin /opt/miniforge3/bin
+    "$HOME/.local/share/uv/python"
+  )
+  # globs for pyenv / uv style nested layouts
+  CANDIDATES=()
+  for d in "${EXTRA_DIRS[@]}"; do
+    [[ -d "$d" ]] || continue
+    # direct python3.x in the dir
+    for v in python3.12 python3.11; do
+      [[ -x "$d/$v" ]] && CANDIDATES+=("$d/$v")
+    done
+    # nested (pyenv/uv): <d>/<version>/bin/python3.x
+    while IFS= read -r p; do CANDIDATES+=("$p"); done < <(
+      find "$d" -maxdepth 4 \( -name 'python3.12' -o -name 'python3.11' \) -type f 2>/dev/null
+    )
+  done
+  for p in "${CANDIDATES[@]}"; do
+    if ver="$(_check_python "$p")"; then
+      CHOSEN="$p"; CHOSEN_VER="$ver"
+      echo "[setup]   found off-PATH: $p (python $ver)"
       break
     fi
-  fi
-done
-if [[ -z "$PY" ]]; then
-  echo "[setup] ERROR: need python 3.11 or 3.12 — none found." >&2
+  done
+fi
+
+if [[ -z "$CHOSEN" ]]; then
+  echo "" >&2
+  echo "[setup] ERROR: no python 3.11 / 3.12 found on PATH or in common locations." >&2
+  echo "[setup] Try one of:" >&2
+  echo "  1. Run ./scripts/find-python.sh to see what's available" >&2
+  echo "  2. Re-run with PY pointing at the binary: " >&2
+  echo "       PY=/abs/path/to/python3.12 ./scripts/offline-setup.sh" >&2
+  echo "  3. Install Python 3.12 (or 3.11) via your package manager / pyenv / conda" >&2
+  echo "       then re-run this script — it'll discover it." >&2
   exit 1
 fi
+PY="$CHOSEN"
+echo "[setup]   using $PY (python $CHOSEN_VER)"
 
 echo "[setup] (2/7) ensuring venv at $VENV ..."
 if [[ ! -d "$VENV" ]]; then

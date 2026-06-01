@@ -124,10 +124,73 @@ column. Bring that filled file back; that's all the info needed to plan Stage
 
 ---
 
+## Preparing Python on the offline machine (PATH not set up?)
+
+The setup wizard needs **Python 3.11 or 3.12**. It looks in three places, in order:
+
+1. The `PY` env var (highest priority — point it at the exact binary).
+2. `python3.12` / `python3.11` / `python3` on `PATH`.
+3. Common off-PATH install locations:
+   - `/usr/bin`, `/usr/local/bin`, `/opt/homebrew/bin`
+   - Mac official installer: `/Library/Frameworks/Python.framework/Versions/3.1?/bin`
+   - Conda: `$HOME/anaconda3/bin`, `$HOME/miniconda3/bin`, `$HOME/miniforge3/bin`
+     (plus `/opt/` variants)
+   - pyenv: `$HOME/.pyenv/versions/*/bin/`
+   - uv: `$HOME/.local/share/uv/python/*/bin/`
+
+So you only need to **either** add Python's directory to `PATH`, **or** point
+`PY` at the binary. You do not have to clean up the rest of `PATH`.
+
+### If you're not sure where Python lives
+
+Run the discovery helper — it scans PATH + all common install locations and
+prints the recommended invocation:
+
+```bash
+./scripts/find-python.sh
+```
+
+Example output:
+
+```
+== Python interpreters discovered ==
+
+-- from PATH --
+  /usr/bin/python3                                              python 3.9.6  (need 3.11 or 3.12)
+
+-- from common install locations --
+  /opt/homebrew/bin/python3.12                                  python 3.12.4  ✅ usable
+  /Users/me/.pyenv/versions/3.11.9/bin/python3.11               python 3.11.9  ✅ usable
+
+== Recommendation ==
+  Use this one:  /opt/homebrew/bin/python3.12
+
+  PY=/opt/homebrew/bin/python3.12 ./scripts/offline-setup.sh
+```
+
+Then copy the printed command and run it. The wizard takes it from there.
+
+### If no usable Python exists yet
+
+| OS | Install Python 3.12 |
+|---|---|
+| macOS (Homebrew) | `brew install python@3.12` |
+| macOS (offline) | Download installer from python.org on online machine → transfer .pkg → install |
+| Ubuntu / Debian | `sudo apt install python3.12 python3.12-venv` (may need deadsnakes PPA on older Ubuntu) |
+| Fedora / RHEL | `sudo dnf install python3.12` |
+| Anywhere | `pyenv install 3.12` (requires pyenv) |
+
+After install, re-run `./scripts/find-python.sh` — the wizard will discover
+it without you touching `PATH`.
+
+---
+
 ## Troubleshooting
 
-**"need python 3.11 or 3.12 — none found"** — Install via `pyenv`, `conda`,
-your package manager, or a system installer; rerun the wizard.
+**"need python 3.11 or 3.12 — none found"** — Run `./scripts/find-python.sh`
+(see section above). If it lists usable candidates, use the printed
+`PY=... ./scripts/offline-setup.sh`. If none exist, install one per the
+table above.
 
 **"Could not find a version that satisfies the requirement"** during pip
 install — means the wheel for your Python version isn't in `vendor/`.
