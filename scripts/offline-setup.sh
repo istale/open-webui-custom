@@ -22,15 +22,14 @@ VENDOR="$(cd "$REPO_ROOT/.." && pwd)/vendor"  # offline-prep places it one level
 PIP_OPTS=()
 
 echo "[setup] repo: $REPO_ROOT"
-echo "[setup] (1/7) checking python ..."
-# Priority:
-#   1. $PY env var (caller knows best)
-#   2. python3.12 / python3.11 / python3 on PATH
-#   3. common install locations that may NOT be on PATH (Homebrew, conda envs,
-#      pyenv shims, uv-managed pythons, official mac installer, opt/, /usr/local)
+echo "[setup] (1/7) selecting python ..."
+# Selection priority:
+#   1. $PY env var      — caller already knows the path, skip all UI
+#   2. interactive Q&A  — when stdin is a tty, ask user to scan or enter path
+#   3. auto-scan        — non-interactive (CI / sub-shell) falls back to first
+#                         usable candidate from PATH + common install locations
 #
-# If your python is somewhere else: run `./scripts/find-python.sh` to discover
-# candidates, then `PY=/abs/path/to/python ./scripts/offline-setup.sh`.
+# PY_EXTRA_DIRS=dir1:dir2  prepends extra search dirs (custom-compiled paths).
 
 _check_python() {
   local p="$1"
@@ -41,10 +40,77 @@ _check_python() {
   echo "$ver"
 }
 
+# Scan PATH + common install locations + PY_EXTRA_DIRS. Prints unique usable
+# candidates to stdout, one per line as "<abs-path>\t<version>".
+_scan_pythons() {
+  local seen_list="" cmd p d v ver real
+  # PATH
+  for cmd in python3.12 python3.11 python3; do
+    if command -v "$cmd" >/dev/null 2>&1; then
+      while IFS= read -r p; do
+        [[ -n "$p" ]] || continue
+        real="$(cd "$(dirname "$p")" 2>/dev/null && pwd -P)/$(basename "$p")"
+        case "|$seen_list|" in *"|$real|"*) continue;; esac
+        seen_list="$seen_list|$real"
+        ver="$(_check_python "$real")" && printf '%s\t%s\n' "$real" "$ver"
+      done < <(command -v -a "$cmd" 2>/dev/null || true)
+    fi
+  done
+  # Off-PATH
+  local EXTRA_DIRS=(
+    /usr/bin /usr/local/bin
+    /opt/homebrew/bin
+    /Library/Frameworks/Python.framework/Versions/3.12/bin
+    /Library/Frameworks/Python.framework/Versions/3.11/bin
+    "$HOME/.pyenv/versions"
+    "$HOME/anaconda3/bin" "$HOME/miniconda3/bin" "$HOME/miniforge3/bin"
+    /opt/anaconda3/bin /opt/miniconda3/bin /opt/miniforge3/bin
+    "$HOME/.local/share/uv/python"
+  )
+  if [[ -n "${PY_EXTRA_DIRS:-}" ]]; then
+    local _extra
+    IFS=':' read -r -a _extra <<< "$PY_EXTRA_DIRS"
+    EXTRA_DIRS=("${_extra[@]}" "${EXTRA_DIRS[@]}")
+  fi
+  for d in "${EXTRA_DIRS[@]}"; do
+    [[ -d "$d" ]] || continue
+    for v in python3.12 python3.11; do
+      p="$d/$v"
+      [[ -x "$p" ]] || continue
+      real="$(cd "$(dirname "$p")" 2>/dev/null && pwd -P)/$(basename "$p")"
+      case "|$seen_list|" in *"|$real|"*) continue;; esac
+      seen_list="$seen_list|$real"
+      ver="$(_check_python "$real")" && printf '%s\t%s\n' "$real" "$ver"
+    done
+    while IFS= read -r p; do
+      [[ -n "$p" ]] || continue
+      real="$(cd "$(dirname "$p")" 2>/dev/null && pwd -P)/$(basename "$p")"
+      case "|$seen_list|" in *"|$real|"*) continue;; esac
+      seen_list="$seen_list|$real"
+      ver="$(_check_python "$real")" && printf '%s\t%s\n' "$real" "$ver"
+    done < <(find "$d" -maxdepth 4 \( -name 'python3.12' -o -name 'python3.11' \) -type f 2>/dev/null)
+  done
+}
+
+# Prompt for a path until a valid 3.11/3.12 binary is given (or user quits).
+_prompt_custom_path() {
+  local p ver
+  while :; do
+    printf "  Enter absolute path to python3.11/3.12 binary (or 'q' to quit): " >&2
+    IFS= read -r p
+    [[ "$p" == "q" || "$p" == "Q" || -z "$p" ]] && return 1
+    if ver="$(_check_python "$p")"; then
+      printf '%s\t%s\n' "$p" "$ver"
+      return 0
+    fi
+    echo "    ✗ $p is not an executable python 3.11/3.12 — try again." >&2
+  done
+}
+
 CHOSEN=""
 CHOSEN_VER=""
 
-# (1) explicit override
+# (1) explicit override — no UI
 if [[ -n "${PY:-}" ]]; then
   if ver="$(_check_python "$PY")"; then
     CHOSEN="$PY"; CHOSEN_VER="$ver"
@@ -55,72 +121,87 @@ if [[ -n "${PY:-}" ]]; then
   fi
 fi
 
-# (2) PATH
+# (2)/(3) scan then either prompt or auto-pick
 if [[ -z "$CHOSEN" ]]; then
-  for candidate in python3.12 python3.11 python3; do
-    if command -v "$candidate" >/dev/null 2>&1; then
-      p="$(command -v "$candidate")"
-      if ver="$(_check_python "$p")"; then
-        CHOSEN="$p"; CHOSEN_VER="$ver"
-        echo "[setup]   found on PATH: $p (python $ver)"
-        break
+  # Decide if we'll be interactive.
+  INTERACTIVE=0
+  if [[ -t 0 && -t 1 && "${NON_INTERACTIVE:-0}" != "1" ]]; then
+    INTERACTIVE=1
+  fi
+
+  if [[ "$INTERACTIVE" == "1" ]]; then
+    echo ""
+    echo "  How do you want to point at python 3.11 / 3.12?"
+    echo "    [1] auto-scan PATH + common install locations  (default)"
+    echo "    [2] enter the path manually"
+    printf "  choice [1/2]: "
+    IFS= read -r choice
+    choice="${choice:-1}"
+  else
+    choice=1
+  fi
+
+  if [[ "$choice" == "2" ]]; then
+    line="$(_prompt_custom_path)" || { echo "[setup] cancelled." >&2; exit 1; }
+    CHOSEN="${line%	*}"; CHOSEN_VER="${line#*	}"
+    echo "[setup]   using $CHOSEN (python $CHOSEN_VER)"
+  else
+    # auto-scan
+    SCAN_RESULTS="$(_scan_pythons)"
+    if [[ -z "$SCAN_RESULTS" ]]; then
+      echo "[setup]   scan found 0 usable python 3.11/3.12 candidates." >&2
+      if [[ "$INTERACTIVE" == "1" ]]; then
+        echo "[setup]   falling back to manual path entry." >&2
+        line="$(_prompt_custom_path)" || { echo "[setup] cancelled." >&2; exit 1; }
+        CHOSEN="${line%	*}"; CHOSEN_VER="${line#*	}"
+        echo "[setup]   using $CHOSEN (python $CHOSEN_VER)"
+      else
+        echo "[setup] ERROR: no usable python found and not running interactively." >&2
+        echo "  Re-run with PY=/abs/path/to/python3.12 or in an interactive shell." >&2
+        exit 1
+      fi
+    else
+      # Build numbered list
+      mapfile -t SCAN_LINES <<< "$SCAN_RESULTS" 2>/dev/null || {
+        # bash 3.2 fallback (no mapfile)
+        SCAN_LINES=()
+        while IFS= read -r line; do SCAN_LINES+=("$line"); done <<< "$SCAN_RESULTS"
+      }
+
+      if [[ "${#SCAN_LINES[@]}" == "1" || "$INTERACTIVE" != "1" ]]; then
+        # Single candidate, or non-interactive: take the first.
+        CHOSEN="${SCAN_LINES[0]%	*}"; CHOSEN_VER="${SCAN_LINES[0]#*	}"
+        echo "[setup]   using $CHOSEN (python $CHOSEN_VER)"
+      else
+        # Multiple candidates and interactive: ask user to pick.
+        echo ""
+        echo "  Found ${#SCAN_LINES[@]} usable python(s):"
+        i=1
+        for line in "${SCAN_LINES[@]}"; do
+          printf "    [%d] %s   (python %s)\n" "$i" "${line%	*}" "${line#*	}"
+          i=$((i + 1))
+        done
+        echo "    [C] enter a custom path instead"
+        printf "  choice [1]: "
+        IFS= read -r pick
+        pick="${pick:-1}"
+        if [[ "$pick" == "C" || "$pick" == "c" ]]; then
+          line="$(_prompt_custom_path)" || { echo "[setup] cancelled." >&2; exit 1; }
+          CHOSEN="${line%	*}"; CHOSEN_VER="${line#*	}"
+        elif [[ "$pick" =~ ^[0-9]+$ && "$pick" -ge 1 && "$pick" -le "${#SCAN_LINES[@]}" ]]; then
+          line="${SCAN_LINES[$((pick - 1))]}"
+          CHOSEN="${line%	*}"; CHOSEN_VER="${line#*	}"
+        else
+          echo "[setup] invalid choice: $pick" >&2
+          exit 1
+        fi
+        echo "[setup]   using $CHOSEN (python $CHOSEN_VER)"
       fi
     fi
-  done
-fi
-
-# (3) common install locations that aren't necessarily on PATH
-if [[ -z "$CHOSEN" ]]; then
-  EXTRA_DIRS=(
-    /usr/bin /usr/local/bin
-    /opt/homebrew/bin
-    /Library/Frameworks/Python.framework/Versions/3.12/bin
-    /Library/Frameworks/Python.framework/Versions/3.11/bin
-    "$HOME/.pyenv/versions"
-    "$HOME/anaconda3/bin" "$HOME/miniconda3/bin" "$HOME/miniforge3/bin"
-    /opt/anaconda3/bin /opt/miniconda3/bin /opt/miniforge3/bin
-    "$HOME/.local/share/uv/python"
-  )
-  # Allow caller to add custom-compiled python locations (colon-separated).
-  if [[ -n "${PY_EXTRA_DIRS:-}" ]]; then
-    IFS=':' read -r -a _PY_EXTRA <<< "$PY_EXTRA_DIRS"
-    EXTRA_DIRS=("${_PY_EXTRA[@]}" "${EXTRA_DIRS[@]}")
   fi
-  # globs for pyenv / uv style nested layouts
-  CANDIDATES=()
-  for d in "${EXTRA_DIRS[@]}"; do
-    [[ -d "$d" ]] || continue
-    # direct python3.x in the dir
-    for v in python3.12 python3.11; do
-      [[ -x "$d/$v" ]] && CANDIDATES+=("$d/$v")
-    done
-    # nested (pyenv/uv): <d>/<version>/bin/python3.x
-    while IFS= read -r p; do CANDIDATES+=("$p"); done < <(
-      find "$d" -maxdepth 4 \( -name 'python3.12' -o -name 'python3.11' \) -type f 2>/dev/null
-    )
-  done
-  for p in "${CANDIDATES[@]}"; do
-    if ver="$(_check_python "$p")"; then
-      CHOSEN="$p"; CHOSEN_VER="$ver"
-      echo "[setup]   found off-PATH: $p (python $ver)"
-      break
-    fi
-  done
 fi
 
-if [[ -z "$CHOSEN" ]]; then
-  echo "" >&2
-  echo "[setup] ERROR: no python 3.11 / 3.12 found on PATH or in common locations." >&2
-  echo "[setup] Try one of:" >&2
-  echo "  1. Run ./scripts/find-python.sh to see what's available" >&2
-  echo "  2. Re-run with PY pointing at the binary: " >&2
-  echo "       PY=/abs/path/to/python3.12 ./scripts/offline-setup.sh" >&2
-  echo "  3. Install Python 3.12 (or 3.11) via your package manager / pyenv / conda" >&2
-  echo "       then re-run this script — it'll discover it." >&2
-  exit 1
-fi
 PY="$CHOSEN"
-echo "[setup]   using $PY (python $CHOSEN_VER)"
 
 echo "[setup] (2/7) ensuring venv at $VENV ..."
 if [[ ! -d "$VENV" ]]; then
@@ -137,14 +218,19 @@ if [[ -d "$VENDOR" ]]; then
 else
   echo "[setup] (3/7) no vendor/ dir found — falling back to PyPI"
   echo "[setup]   (if this machine has no internet, run offline-prep.sh on an online machine first)"
+  PIP_OPTS=()
 fi
-"$VPY" -m pip install --quiet --upgrade pip "${PIP_OPTS[@]}" 2>/dev/null || \
-  "$VPY" -m pip install --upgrade pip "${PIP_OPTS[@]}"
-"$VPY" -m pip install --quiet -r backend/requirements.txt "${PIP_OPTS[@]}"
-"$VPY" -m pip install --quiet pytest "${PIP_OPTS[@]}" || true  # pytest needed for smoke test
+# Expand PIP_OPTS safely under `set -u`: ${arr[@]+"${arr[@]}"} is the bash 3.2
+# idiom for "expand if non-empty, else nothing" — a bare ${arr[@]} trips set -u
+# when the array has zero elements.
+"$VPY" -m pip install --quiet --upgrade pip ${PIP_OPTS[@]+"${PIP_OPTS[@]}"} 2>/dev/null || \
+  "$VPY" -m pip install --upgrade pip ${PIP_OPTS[@]+"${PIP_OPTS[@]}"}
+"$VPY" -m pip install --quiet -r backend/requirements.txt ${PIP_OPTS[@]+"${PIP_OPTS[@]}"}
+"$VPY" -m pip install --quiet pytest ${PIP_OPTS[@]+"${PIP_OPTS[@]}"} || true
 
 echo "[setup] (4/7) installing project editable ..."
-"$VPY" -m pip install --quiet -e backend --no-deps
+# pyproject.toml lives at the repo root, not under backend/.
+"$VPY" -m pip install --quiet -e . --no-deps
 
 echo "[setup] (5/7) checking .env ..."
 if [[ ! -f .env ]]; then
