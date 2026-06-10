@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 from typing import Annotated
 
@@ -126,6 +127,48 @@ async def log_frontend_event(payload: FrontendEventPayload, user=Depends(get_ver
 
 class _ToolCallBody(BaseModel):
     args: dict = Field(default_factory=dict)
+
+
+@router.get('/events/by-trace/{aoh_trace_id}')
+async def events_by_aoh_trace(
+    aoh_trace_id: str,
+    limit: int = 50,
+    ctx: dict = Depends(verify_pi_service_token),
+):
+    """Return data_analysis_events rows whose payload.aoh_trace_id matches.
+
+    Stage 4: lets the hub UI cross-link to the Open WebUI ledger view of
+    the same model-call turn. Service-auth only — we are not exposing
+    arbitrary ledger reads to browsers via this path.
+    """
+    from sqlalchemy import text
+
+    from open_webui.internal.db import get_db
+
+    sql = text(
+        """
+        SELECT id, ts, user_id, chat_id, message_id, event_type, tool_name,
+               chart_type, duration_ms, success, error_code, payload
+        FROM data_analysis_events
+        WHERE is_deleted = 0
+          AND json_extract(payload, '$.aoh_trace_id') = :tid
+        ORDER BY ts ASC
+        LIMIT :lim
+        """
+    )
+    with get_db() as db:
+        rows = db.execute(sql, {"tid": aoh_trace_id, "lim": int(limit)}).fetchall()
+    out = []
+    for r in rows:
+        # SQLAlchemy Row supports both index and attribute access; normalize.
+        d = dict(r._mapping) if hasattr(r, '_mapping') else dict(r)
+        try:
+            payload_data = json.loads(d.get('payload') or '{}')
+        except Exception:
+            payload_data = {}
+        d['payload'] = payload_data
+        out.append(d)
+    return {"aoh_trace_id": aoh_trace_id, "count": len(out), "events": out}
 
 
 @router.get('/tool-specs')
