@@ -78,12 +78,16 @@ def _emit_tool_event(
     error_code: str | None = None,
 ) -> None:
     chat_id, message_id = _context_from_metadata(metadata)
+    enriched_payload = dict(payload)
+    aoh_trace_id = (metadata or {}).get('aoh_trace_id')
+    if aoh_trace_id:
+        enriched_payload['aoh_trace_id'] = aoh_trace_id
     schedule_log_event(
         event_type=event_type,
         user_id=user_id,
         chat_id=chat_id,
         message_id=message_id,
-        payload=_json_ready(payload),
+        payload=_json_ready(enriched_payload),
         dataset_id=dataset_id,
         chart_type=chart_type,
         tool_name=tool_name,
