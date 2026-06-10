@@ -630,6 +630,127 @@ Method 簽名上以 `__xxx__` 開頭的參數會被 [`utils/tools.py:194`](backe
 
 ---
 
+## Pi service HTTP surface — 把 Tools 借給外部 agent runtime
+
+Stage 0 of the Pi-as-engine integration exposes the same `Tools` class
+methods over HTTP so an external agent runtime can drive the model loop
+(multi-step reasoning, decide-to-ask-back, decide-to-render-N-charts)
+without losing access to the data layer that lives in this app.
+
+### 兩條 dispatch path 共用一份實作
+
+```
+                       browser session
+                              ▼
+                native chat middleware
+                              ▼
+       ┌──────────────────────┴──────────────────────┐
+       │      Tools().X(__user__=..., __metadata__=...)  │
+       └──────────────────────┬──────────────────────┘
+                              ▲
+                dispatch_tool_call(...)
+                              ▲
+       ┌──────────────────────┴──────────────────────┐
+       │  POST /api/v1/data-analysis/tools/{name}    │
+       │  (X-Pi-Service-Token + X-User-Id)            │
+       └─────────────────────────────────────────────┘
+                              ▲
+                          Pi agent
+```
+
+`dispatch_tool_call` (in `utils/data_analysis/tool_http_dispatch.py`)
+constructs the same `__user__` / `__metadata__` injections native
+middleware would and calls into the live `app.state.TOOLS` instance.
+Any future in-process re-execution path (for example
+`replay_cli regression`) must reuse this same function so trajectory
+replay remains byte-equivalent.
+
+### Endpoint contract
+
+`GET /api/v1/data-analysis/tool-specs`
+
+Returns the OpenAI function specs the model would see in-process. The
+Pi side reuses these verbatim when registering its tool handlers so the
+model sees the same schema regardless of transport.
+
+Response:
+```json
+{
+  "schema_version": 1,
+  "tool_spec_version": "da-tools-2026-05-27",
+  "tools": [ /* OpenAI function spec list */ ]
+}
+```
+
+`POST /api/v1/data-analysis/tools/{name}`
+
+Body:
+```json
+{ "args": { /* matches the tool's parameters spec */ } }
+```
+
+Response (success):
+```json
+{ "ok": true, "result": <tool's native dict result> }
+```
+
+Response (tool runtime error — HTTP 200):
+```json
+{ "ok": false, "error_code": "ValueError", "error_message": "..." }
+```
+
+Failures returning 4xx (FastAPI standard `{detail: ...}`):
+
+- 401 — missing or wrong `X-Pi-Service-Token`
+- 400 — missing `X-User-Id`, unknown argument, or reserved `__*__` arg
+- 404 — unknown tool name
+- 503 — `AOH_PI_SHARED_SECRET` not configured (fail-closed)
+
+### Auth model
+
+- Browser-facing endpoints keep `Depends(get_verified_user)` (session token).
+- The new endpoints accept ONLY `X-Pi-Service-Token` matching
+  `AOH_PI_SHARED_SECRET`. The two paths are mutually exclusive: a service
+  caller cannot accidentally piggyback on a browser session, and a
+  browser cannot accidentally hit a service endpoint.
+- The shared secret being unset → 503. This is intentional: a misconfigured
+  dev box never exposes tool execution to unauthenticated callers.
+
+### Ledger correlation: `aoh_trace_id`
+
+When Pi forwards a model call it carries an `X-Aoh-Trace-Id` header for
+that turn. The dispatch layer puts it into `__metadata__['aoh_trace_id']`
+and `_emit_tool_event` (in `tool_module.py`) stamps it into
+`data_analysis_events.payload.aoh_trace_id`.
+
+This is the join key for Stage 4: a row in `data_analysis_events` and a
+row in Pi/Hub `agent_events` for the same model call now share a value,
+without coupling either schema to the other.
+
+### Versioning
+
+`TOOL_SPEC_VERSION` is NOT bumped for Stage 0: the model-visible function
+specs are identical; this is purely a new callable transport for the
+same in-process Tools. Bump only when a method signature or behaviour
+changes.
+
+### Implementation files (Stage 0)
+
+```
+backend/open_webui/utils/data_analysis/service_auth.py        [new]
+backend/open_webui/utils/data_analysis/tool_http_dispatch.py  [new]
+backend/open_webui/tools/data_analysis/tool_module.py         [edit] aoh_trace_id stamp
+backend/open_webui/routers/data_analysis.py                   [edit] add /tool-specs + /tools/{name}
+tests/data_analysis/test_service_auth.py                      [new]
+tests/data_analysis/test_tool_http_dispatch.py                [new]
+tests/data_analysis/test_tool_http_endpoint.py                [new]
+```
+
+No new core touch — the new endpoints attach to the existing router
+already registered in `main.py`.
+
+---
+
 ## Acceptance（如何驗證 tool calling 路徑通了）
 
 - [ ] `list_datasets` 從 LLM prompt 觸發，原生 chat 自動 dispatch 到 backend，結果出現在 assistant `message.output[]` 的 `function_call_output`

@@ -175,6 +175,30 @@ Commit prefix `[core-touch]` 標示。
 
 ---
 
+## Pi service HTTP surface (Stage 0)
+
+For external agent runtimes (Pi) that drive the model loop, the same `Tools`
+instance is exposed over HTTP:
+
+| Endpoint | Auth | Purpose |
+|---|---|---|
+| `GET /api/v1/data-analysis/tool-specs` | `X-Pi-Service-Token` | OpenAI function specs (same set the model sees in-process) |
+| `POST /api/v1/data-analysis/tools/{name}` | `X-Pi-Service-Token` + `X-User-Id` | Execute one tool; returns `{ok:true,result}` on success, `{ok:false,error_code,error_message}` on tool runtime error, 4xx on auth/arg failure |
+
+Headers used:
+
+- `X-Pi-Service-Token` — required. Must match `AOH_PI_SHARED_SECRET`. Empty/missing secret → 503 (fail-closed).
+- `X-User-Id` — required. Acts as `__user__['id']` injected into the tool.
+- `X-Chat-Id`, `X-Message-Id` — optional. Become `__metadata__['chat_id']` / `__metadata__['message_id']`, hence ledger row context.
+- `X-Aoh-Trace-Id` — optional. Stamped into `data_analysis_events.payload.aoh_trace_id` so rows can later be joined to Pi/Hub `agent_events` on the same model-call trace.
+
+Implementation:
+
+- `verify_pi_service_token` → `utils/data_analysis/service_auth.py`
+- `dispatch_tool_call` → `utils/data_analysis/tool_http_dispatch.py` (single execution path; future in-process replay reuses it)
+- Endpoints live in the existing `routers/data_analysis.py` — no new core touch.
+- `TOOL_SPEC_VERSION` is unchanged: HTTP is a transport, not a contract change.
+
 ## Frontend usage
 
 ```ts
