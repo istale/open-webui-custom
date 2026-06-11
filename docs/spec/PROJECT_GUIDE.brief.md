@@ -9,7 +9,7 @@
 Vertical workspace built on top of Open WebUI fork.
 - Repo: `https://github.com/istale/open-webui-custom`
 - Branch: `vertical/data-analysis`
-- Local: `/Users/istale/Documents/open-webui-based-project`
+- Local: `/Users/istale/Documents/pi-agent-obervation/repos/open-webui-custom`
 - Upstream: `https://github.com/open-webui/open-webui`
 
 ---

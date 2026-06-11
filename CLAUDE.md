@@ -86,6 +86,6 @@ whether `eval` should be run with the candidate to confirm no regression.
 
 ## Anti-patterns observed in past sessions
 
-- Trying to run things from `/Users/istale/Documents/New project/repos/open-webui` (the **old** sibling repo). Always `cd` to `/Users/istale/Documents/open-webui-based-project`.
+- Trying to run things from `/Users/istale/Documents/New project/repos/open-webui` (the **old** sibling repo). Always `cd` to `/Users/istale/Documents/pi-agent-obervation/repos/open-webui-custom`.
 - Confusing the venv: tests need the path above; the `xx_dev_env` `pytest` won't import the project.
 - Embedding chart URL placeholders (`![](chart-image)`) instead of the real `/api/v1/data-analysis/charts/<id>.png` returned by `render_chart`. The system prompt forbids this; eval scores it.

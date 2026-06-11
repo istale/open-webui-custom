@@ -38,7 +38,7 @@ Open WebUI already owns process startup. The vertical adds small hooks only:
 For local backend validation:
 
 ```bash
-cd /Users/istale/Documents/open-webui-based-project
+cd /Users/istale/Documents/pi-agent-obervation/repos/open-webui-custom
 pytest tests/data_analysis/ -v
 grep -rn "import httpx" backend/open_webui/tools backend/open_webui/routers
 ```
@@ -55,7 +55,7 @@ Expected:
 Use Node 22 for this fork. The system Node 25 can fail package engine checks.
 
 ```bash
-cd /Users/istale/Documents/open-webui-based-project
+cd /Users/istale/Documents/pi-agent-obervation/repos/open-webui-custom
 PATH=/usr/local/bin:$PATH npm ci
 PATH=/usr/local/bin:$PATH npx vite dev --host 127.0.0.1 --port 5173
 ```

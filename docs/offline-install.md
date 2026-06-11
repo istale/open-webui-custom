@@ -22,7 +22,7 @@ case if Open WebUI is generating data there), this is the cheap path:
 
 ```bash
 # On your laptop (online):
-cd /Users/istale/Documents/open-webui-based-project
+cd /Users/istale/Documents/pi-agent-obervation/repos/open-webui-custom
 ./scripts/offline-prep.sh
 #   -> writes  dist/offline-bundle-YYYYMMDD-vertical-data-analysis.tar.gz
 
@@ -48,7 +48,7 @@ verify. It will skip steps that are already done.
 ### Step 1 — on the ONLINE machine, build a transferable bundle
 
 ```bash
-cd /Users/istale/Documents/open-webui-based-project
+cd /Users/istale/Documents/pi-agent-obervation/repos/open-webui-custom
 ./scripts/offline-prep.sh
 ```
 

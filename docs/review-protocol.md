@@ -233,7 +233,7 @@ If none: "None."
 
 ```bash
 # e.g.
-cd /Users/istale/Documents/open-webui-based-project
+cd /Users/istale/Documents/pi-agent-obervation/repos/open-webui-custom
 pytest tests/data_analysis/ -v
 ```
 
