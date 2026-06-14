@@ -1,0 +1,508 @@
+"""Manufacturing data-analysis tools exposed through Open WebUI native chat.
+
+Open WebUI discovers methods on ``class Tools`` and builds the model-visible
+function schema from type hints plus docstrings. Keep infrastructure fields
+such as user id, timestamps, cache keys, and chart ids out of method
+parameters; native middleware injects ``__user__`` after the model chooses a
+tool call.
+"""
+
+from __future__ import annotations
+
+import time
+from dataclasses import asdict, is_dataclass
+from datetime import datetime, timezone
+from typing import Any
+from uuid import uuid4
+
+from open_webui.utils.data_analysis import get_repository
+from open_webui.utils.data_analysis.chart_store import ChartRecord, get_chart_store
+from open_webui.utils.data_analysis.event_logger import schedule_log_event
+from open_webui.utils.data_analysis.query_cache import get_query_cache
+from open_webui.utils.data_analysis.repository import DatasetMeta, QueryResult
+
+
+def _json_ready(value: Any) -> Any:
+    """Convert frozen DTOs to JSON-ready values without adding model-visible fields."""
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if hasattr(value, 'isoformat') and value.__class__.__module__.startswith('pandas'):
+        return value.isoformat()
+    if hasattr(value, 'item') and value.__class__.__module__.startswith('numpy'):
+        return _json_ready(value.item())
+    if value != value:
+        return None
+    if is_dataclass(value):
+        return _json_ready(asdict(value))
+    if isinstance(value, dict):
+        return {key: _json_ready(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_json_ready(item) for item in value]
+    return value
+
+
+def _dataset_to_response(meta: DatasetMeta) -> dict[str, Any]:
+    return _json_ready(meta)
+
+
+def _require_user(__user__: dict | None) -> str:
+    if not __user__ or not __user__.get('id'):
+        raise ValueError('Authenticated user context is required for data analysis tools.')
+    return __user__['id']
+
+
+def _parse_csv(value: str) -> list[str]:
+    return [item.strip() for item in value.split(',') if item.strip()]
+
+
+def _context_from_metadata(metadata: dict | None) -> tuple[str | None, str | None]:
+    metadata = metadata or {}
+    return metadata.get('chat_id'), metadata.get('message_id')
+
+
+def _error_code(exc: Exception) -> str:
+    return exc.__class__.__name__.replace('Error', '').upper() or 'ERROR'
+
+
+def _emit_tool_event(
+    *,
+    event_type: str,
+    user_id: str,
+    metadata: dict | None,
+    payload: dict[str, Any],
+    tool_name: str,
+    started_at: float,
+    dataset_id: str | None = None,
+    chart_type: str | None = None,
+    success: bool = True,
+    error_code: str | None = None,
+) -> None:
+    chat_id, message_id = _context_from_metadata(metadata)
+    enriched_payload = dict(payload)
+    aoh_trace_id = (metadata or {}).get('aoh_trace_id')
+    if aoh_trace_id:
+        enriched_payload['aoh_trace_id'] = aoh_trace_id
+    schedule_log_event(
+        event_type=event_type,
+        user_id=user_id,
+        chat_id=chat_id,
+        message_id=message_id,
+        payload=_json_ready(enriched_payload),
+        dataset_id=dataset_id,
+        chart_type=chart_type,
+        tool_name=tool_name,
+        duration_ms=int((time.perf_counter() - started_at) * 1000),
+        success=success,
+        error_code=error_code,
+    )
+
+
+def _statistics_for_df(df) -> dict[str, Any]:
+    numeric = df.select_dtypes(include='number')
+    stats: dict[str, Any] = {}
+    for column in numeric.columns:
+        series = numeric[column].dropna()
+        if series.empty:
+            continue
+        stats[column] = _json_ready(
+            {
+                'count': int(series.count()),
+                'mean': series.mean(),
+                'std': series.std(),
+                'min': series.min(),
+                'max': series.max(),
+            }
+        )
+    return stats
+
+
+def _preview_from_result(result: QueryResult, max_rows: int) -> list[dict[str, Any]]:
+    preview = result.df.head(max_rows).to_dict(orient='records')
+    return _json_ready(preview)
+
+
+class Tools:
+    """Data analysis vertical workspace tools for manufacturing datasets."""
+
+    def __init__(self):
+        self._repo = None
+        self.query_cache = get_query_cache()
+        self.chart_store = get_chart_store()
+
+    @property
+    def repo(self):
+        if self._repo is None:
+            self._repo = get_repository()
+        return self._repo
+
+    def list_datasets(
+        self,
+        tags: str = '',
+        __user__: dict | None = None,
+        __metadata__: dict | None = None,
+    ) -> dict[str, Any]:
+        """List manufacturing datasets the current user can access.
+
+        :param tags: Optional comma-separated tag filter, for example "production,line-a".
+        :return: JSON object with schema_version and an items list of dataset metadata.
+        """
+        started_at = time.perf_counter()
+        user_id = _require_user(__user__)
+        tag_list = [tag.strip() for tag in tags.split(',') if tag.strip()] or None
+
+        try:
+            items = self.repo.list_datasets(user_id=user_id, tags=tag_list)
+        except Exception as exc:
+            _emit_tool_event(
+                event_type='tool.list_datasets.failed',
+                user_id=user_id,
+                metadata=__metadata__,
+                payload={'tags': tags, 'error_message': str(exc)},
+                tool_name='list_datasets',
+                started_at=started_at,
+                success=False,
+                error_code=_error_code(exc),
+            )
+            raise RuntimeError(f'Unable to list manufacturing datasets: {exc}') from exc
+
+        response = {
+            'schema_version': 1,
+            'items': [_dataset_to_response(item) for item in items],
+        }
+        _emit_tool_event(
+            event_type='tool.list_datasets.succeeded',
+            user_id=user_id,
+            metadata=__metadata__,
+            payload={'tags': tags, 'count': len(items)},
+            tool_name='list_datasets',
+            started_at=started_at,
+        )
+        return response
+
+    def get_dataset_schema(
+        self,
+        dataset_id: str,
+        __user__: dict | None = None,
+        __metadata__: dict | None = None,
+    ) -> dict[str, Any]:
+        """Get column schema and metadata for a manufacturing dataset.
+
+        :param dataset_id: Dataset identifier from list_datasets.
+        :return: JSON object with dataset metadata and column schema.
+        """
+        started_at = time.perf_counter()
+        user_id = _require_user(__user__)
+        try:
+            meta = self.repo.get_metadata(dataset_id, user_id=user_id)
+        except Exception as exc:
+            _emit_tool_event(
+                event_type='tool.get_dataset_schema.failed',
+                user_id=user_id,
+                metadata=__metadata__,
+                payload={'dataset_id': dataset_id, 'error_message': str(exc)},
+                tool_name='get_dataset_schema',
+                dataset_id=dataset_id,
+                started_at=started_at,
+                success=False,
+                error_code=_error_code(exc),
+            )
+            raise
+        response = {'schema_version': 1, 'dataset': _dataset_to_response(meta)}
+        _emit_tool_event(
+            event_type='tool.get_dataset_schema.succeeded',
+            user_id=user_id,
+            metadata=__metadata__,
+            payload={'dataset_id': dataset_id, 'column_count': meta.column_count},
+            tool_name='get_dataset_schema',
+            dataset_id=dataset_id,
+            started_at=started_at,
+        )
+        return response
+
+    def query_dataset(
+        self,
+        dataset_id: str,
+        query: str,
+        max_rows: int = 100,
+        __user__: dict | None = None,
+        __metadata__: dict | None = None,
+    ) -> dict[str, Any]:
+        """Run a SELECT query and cache the full result server-side.
+
+        :param dataset_id: Dataset identifier from list_datasets.
+        :param query: SQL SELECT statement. Non-SELECT statements are rejected by the repository.
+        :param max_rows: Maximum preview rows to return to the model.
+        :return: JSON object with query_id, row_count, preview rows, dtypes, and statistics.
+        """
+        started_at = time.perf_counter()
+        user_id = _require_user(__user__)
+        preview_rows = max(1, min(int(max_rows or 100), 500))
+        try:
+            result = self.repo.execute_query(
+                dataset_id,
+                query,
+                user_id=user_id,
+                max_rows=10_000_000,
+                timeout_s=30,
+            )
+            query_id = self.query_cache.put(
+                dataset_id=dataset_id,
+                sql=query,
+                df=result.df,
+                user_id=user_id,
+                row_count=result.row_count,
+                ttl_s=3600,
+            )
+        except Exception as exc:
+            _emit_tool_event(
+                event_type='tool.query_dataset.failed',
+                user_id=user_id,
+                metadata=__metadata__,
+                payload={'sql': query, 'error_message': str(exc)},
+                tool_name='query_dataset',
+                dataset_id=dataset_id,
+                started_at=started_at,
+                success=False,
+                error_code=_error_code(exc),
+            )
+            raise
+        response = {
+            'schema_version': 1,
+            'query_id': query_id,
+            'dataset_id': dataset_id,
+            'row_count': result.row_count,
+            'truncated': result.truncated,
+            'elapsed_ms': result.elapsed_ms,
+            'columns': list(result.df.columns),
+            'dtypes': {column: str(dtype) for column, dtype in result.df.dtypes.items()},
+            'preview': _preview_from_result(result, preview_rows),
+            'statistics': _statistics_for_df(result.df),
+        }
+        _emit_tool_event(
+            event_type='tool.query_dataset.succeeded',
+            user_id=user_id,
+            metadata=__metadata__,
+            payload={
+                'sql': query,
+                'query_id': query_id,
+                'row_count': result.row_count,
+                'truncated': result.truncated,
+            },
+            tool_name='query_dataset',
+            dataset_id=dataset_id,
+            started_at=started_at,
+        )
+        return response
+
+    def render_chart(
+        self,
+        query_id: str,
+        chart_type: str,
+        x: str,
+        y: str,
+        title: str,
+        explanation_source: str,
+        explanation_method: str,
+        explanation_fields: str,
+        facet: str = '',
+        color: str = '',
+        explanation_aggregation: str = '',
+        explanation_notes: str = '',
+        __user__: dict | None = None,
+        __metadata__: dict | None = None,
+    ) -> dict[str, Any]:
+        """Render a matplotlib PNG from a cached query result.
+
+        :param query_id: query_id returned by query_dataset.
+        :param chart_type: One of line, bar, scatter, histogram, box, heatmap, control, spc, pareto.
+        :param x: Column name for the x-axis or grouping axis.
+        :param y: Column name for the y-axis or measured value.
+        :param title: Chart title.
+        :param explanation_source: Data source description for the analyst-facing caption.
+        :param explanation_method: Statistical or aggregation method used.
+        :param explanation_fields: Comma-separated column names referenced in the chart.
+        :param facet: Optional grouping column reserved for future subplot support.
+        :param color: Optional numeric column for scatter color or heatmap value.
+        :param explanation_aggregation: Optional aggregation label.
+        :param explanation_notes: Optional notes for analyst audit.
+        :return: JSON object describing the rendered chart image attachment.
+        """
+        started_at = time.perf_counter()
+        user_id = _require_user(__user__)
+        # Phase 0 (replay): record the chart args the model requested on every
+        # render event, so failures like "Unknown column(s): count" are
+        # analyzable structurally without parsing the error string.
+        chart_args = {'x': x, 'y': y, 'color': color or None, 'facet': facet or None}
+        entry = self.query_cache.get(query_id, user_id=user_id)
+        if entry is None:
+            exc = ValueError(f'query_id {query_id} expired or not found. Please re-run query_dataset.')
+            _emit_tool_event(
+                event_type='tool.render_chart.failed',
+                user_id=user_id,
+                metadata=__metadata__,
+                payload={
+                    'query_id': query_id,
+                    'chart_type': chart_type,
+                    'error_message': str(exc),
+                    **chart_args,
+                },
+                tool_name='render_chart',
+                chart_type=chart_type,
+                started_at=started_at,
+                success=False,
+                error_code='QUERY_ID_NOT_FOUND',
+            )
+            raise exc
+
+        from open_webui.utils.data_analysis.chart_renderer import render_matplotlib_chart
+
+        chart_id = uuid4().hex
+        image_path, thumb_path = self.chart_store.paths_for(chart_id)
+        try:
+            render_info = render_matplotlib_chart(
+                entry.df,
+                chart_type=chart_type,
+                x=x,
+                y=y,
+                title=title,
+                output_path=image_path,
+                thumb_path=thumb_path,
+                facet=facet,
+                color=color,
+            )
+        except Exception as exc:
+            _emit_tool_event(
+                event_type='tool.render_chart.failed',
+                user_id=user_id,
+                metadata=__metadata__,
+                payload={
+                    'query_id': query_id,
+                    'chart_type': chart_type,
+                    'error_message': str(exc),
+                    **chart_args,
+                },
+                tool_name='render_chart',
+                chart_type=chart_type,
+                started_at=started_at,
+                success=False,
+                error_code=_error_code(exc),
+            )
+            raise
+        chat_id = (__metadata__ or {}).get('chat_id')
+        self.chart_store.put(
+            ChartRecord(
+                chart_id=chart_id,
+                user_id=user_id,
+                path=image_path,
+                thumb_path=thumb_path,
+                chart_type=render_info['chart_type'],
+                title=title,
+                query_id=query_id,
+                chat_id=chat_id,
+            )
+        )
+
+        response = {
+            'schema_version': 1,
+            'type': 'image',
+            'attachment': {
+                'id': chart_id,
+                'url': f'/api/v1/data-analysis/charts/{chart_id}.png',
+                'thumb_url': f'/api/v1/data-analysis/charts/{chart_id}.png?thumb=1',
+                'mime_type': 'image/png',
+                'metadata': {
+                    'chart_type': render_info['chart_type'],
+                    'title': title,
+                    'explanation': {
+                        'source': explanation_source,
+                        'method': explanation_method,
+                        'fields': _parse_csv(explanation_fields),
+                        'aggregation': explanation_aggregation or None,
+                        'notes': explanation_notes or None,
+                        'statistics': _statistics_for_df(entry.df[[column for column in [x, y, color] if column]]),
+                    },
+                    'audit': {
+                        'rendered_at': datetime.now(timezone.utc).isoformat(),
+                        'renderer': 'matplotlib',
+                        'raw_row_count': render_info['raw_row_count'],
+                        'query_id': query_id,
+                        'image_size_bytes': render_info['image_size_bytes'],
+                    },
+                },
+            },
+        }
+        _emit_tool_event(
+            event_type='tool.render_chart.succeeded',
+            user_id=user_id,
+            metadata=__metadata__,
+            payload={
+                'chart_type': render_info['chart_type'],
+                'query_id': query_id,
+                'chart_id': chart_id,
+                'image_size_bytes': render_info['image_size_bytes'],
+                'statistics': response['attachment']['metadata']['explanation']['statistics'],
+                **chart_args,
+            },
+            tool_name='render_chart',
+            chart_type=render_info['chart_type'],
+            started_at=started_at,
+        )
+        return response
+
+    def summarize_data(
+        self,
+        query_id: str,
+        title: str,
+        summary: str,
+        key_findings: str = '',
+        __user__: dict | None = None,
+        __metadata__: dict | None = None,
+    ) -> dict[str, Any]:
+        """Package a textual summary of a cached query result.
+
+        :param query_id: query_id returned by query_dataset.
+        :param title: Summary title.
+        :param summary: Markdown-formatted summary.
+        :param key_findings: Optional newline- or semicolon-separated finding list.
+        :return: JSON object with summary content and query audit context.
+        """
+        started_at = time.perf_counter()
+        user_id = _require_user(__user__)
+        entry = self.query_cache.get(query_id, user_id=user_id)
+        if entry is None:
+            exc = ValueError(f'query_id {query_id} expired or not found. Please re-run query_dataset.')
+            _emit_tool_event(
+                event_type='tool.summarize_data.failed',
+                user_id=user_id,
+                metadata=__metadata__,
+                payload={'query_id': query_id, 'error_message': str(exc)},
+                tool_name='summarize_data',
+                started_at=started_at,
+                success=False,
+                error_code='QUERY_ID_NOT_FOUND',
+            )
+            raise exc
+
+        findings = [item.strip('- ').strip() for item in key_findings.replace(';', '\n').splitlines() if item.strip()]
+        response = {
+            'schema_version': 1,
+            'type': 'summary',
+            'title': title,
+            'summary': summary,
+            'key_findings': findings,
+            'metadata': {
+                'query_id': query_id,
+                'dataset_id': entry.dataset_id,
+                'row_count': entry.row_count,
+            },
+        }
+        _emit_tool_event(
+            event_type='tool.summarize_data.succeeded',
+            user_id=user_id,
+            metadata=__metadata__,
+            payload={'query_id': query_id, 'title': title, 'key_finding_count': len(findings)},
+            tool_name='summarize_data',
+            dataset_id=entry.dataset_id,
+            started_at=started_at,
+        )
+        return response

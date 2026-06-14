@@ -87,6 +87,7 @@ from open_webui.routers import (
     auths,
     channels,
     chats,
+    data_analysis,
     notes,
     folders,
     configs,
@@ -740,12 +741,21 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             log.warning(f'Failed to initialize terminal servers at startup: {e}')
 
+    # [core-touch] Seed vertical tools and start their non-blocking ledger worker.
+    from open_webui.tools.data_analysis import register_builtin_data_analysis_tool
+    await register_builtin_data_analysis_tool(app)
+    from open_webui.utils.data_analysis.event_logger import start_event_worker
+    start_event_worker(app)
+
     # Mark application as ready to accept traffic from a startup perspective.
     app.state.startup_complete = True
 
     yield
 
     # Shutdown: clean up shared resources
+    from open_webui.utils.data_analysis.event_logger import stop_event_worker
+    await stop_event_worker()
+
     from open_webui.utils.session_pool import close_session
 
     await close_session()
@@ -1434,6 +1444,7 @@ app.include_router(users.router, prefix='/api/v1/users', tags=['users'])
 
 app.include_router(channels.router, prefix='/api/v1/channels', tags=['channels'])
 app.include_router(chats.router, prefix='/api/v1/chats', tags=['chats'])
+app.include_router(data_analysis.router, prefix='/api/v1/data-analysis', tags=['data-analysis'])
 app.include_router(notes.router, prefix='/api/v1/notes', tags=['notes'])
 
 

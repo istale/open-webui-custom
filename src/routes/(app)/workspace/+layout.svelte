@@ -56,6 +56,7 @@
 			? 'md:max-w-[calc(100%-var(--sidebar-width))]'
 			: ''} max-w-full"
 	>
+		{#if !$page.url.pathname.includes('/workspace/data-analysis')}
 		<nav class="   px-2.5 pt-1.5 backdrop-blur-xl drag-region select-none">
 			<div class=" flex items-center gap-1">
 				{#if $mobile}
@@ -150,6 +151,7 @@
 				<!-- <div class="flex items-center text-xl font-medium">{$i18n.t('Workspace')}</div> -->
 			</div>
 		</nav>
+		{/if}
 
 		<div
 			class="  pb-1 px-3 md:px-[18px] flex-1 max-h-full overflow-y-auto"

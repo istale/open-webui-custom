@@ -113,6 +113,13 @@
 	import { getBanners } from '$lib/apis/configs';
 
 	export let chatIdProp = '';
+	export let extraToolIds: string[] = [];
+	export let extraMetadata: Record<string, any> = {};
+	export let extraSystemPrompt = '';
+	export let chatRoutePrefix = '/c';
+	export let onVerticalHistoryChange = (_history: any) => {};
+	export let onPromptSubmit = (_prompt: string, _chatId: string, _meta?: { model?: string }) => {};
+	export let onStreamAbort = (_chatId: string) => {};
 
 	let loading = true;
 
@@ -171,6 +178,10 @@
 		messages: {},
 		currentId: null
 	};
+	$: {
+		onHistoryChange(history);
+		onVerticalHistoryChange(history);
+	}
 
 	let taskIds = null;
 
@@ -1954,6 +1965,7 @@
 
 	const submitHandler = async (userPrompt, { _raw = false } = {}) => {
 		console.log('submitHandler', userPrompt, $chatId);
+		onPromptSubmit(userPrompt, $chatId, { model: selectedModels?.[0] ?? '' });
 
 		const _selectedModels = selectedModels.map((modelId) =>
 			$models.map((m) => m.id).includes(modelId) ? modelId : ''
@@ -2294,10 +2306,12 @@
 			true;
 		// Always include system prompt — backend extracts it and prepends to DB messages.
 		// Only temp chats need conversation messages (persisted chats load from DB).
+		// [core-touch] vertical workspaces (e.g. data-analysis) pass extraSystemPrompt
+		// as a fallback so the model always gets the tool-workflow directive even when
+		// no chat-level or user-level system prompt is set.
+		const effectiveSystem = params?.system ?? $settings?.system ?? extraSystemPrompt ?? '';
 		let messages = [
-			params?.system || $settings.system
-				? { role: 'system', content: `${params?.system ?? $settings?.system ?? ''}` }
-				: undefined
+			effectiveSystem ? { role: 'system', content: `${effectiveSystem}` } : undefined
 		].filter(Boolean);
 
 		if ($temporaryChatEnabled) {
@@ -2355,6 +2369,11 @@
 					toolServerIds.push(serverId);
 				}
 			} else {
+				toolIds.push(toolId);
+			}
+		}
+		for (const toolId of extraToolIds) {
+			if (!toolIds.includes(toolId)) {
 				toolIds.push(toolId);
 			}
 		}
@@ -2511,7 +2530,7 @@
 				if (res.chat_id && $chatId !== res.chat_id && $chatId === _chatId) {
 					await chatId.set(res.chat_id);
 					if (!$temporaryChatEnabled) {
-						window.history.replaceState(history.state, '', `/c/${res.chat_id}`);
+						window.history.replaceState(history.state, '', `${chatRoutePrefix}/${res.chat_id}`);
 						currentChatPage.set(1);
 						await chats.set(await getChatList(localStorage.token, $currentChatPage));
 
@@ -2521,8 +2540,11 @@
 						// by the backend at chat creation time.
 						if (Object.keys(params).length > 0) {
 							await updateChatById(localStorage.token, res.chat_id, {
-								params: params
+								params: params,
+								...(Object.keys(extraMetadata).length > 0 ? { metadata: extraMetadata } : {})
 							});
+						} else if (Object.keys(extraMetadata).length > 0) {
+							await updateChatById(localStorage.token, res.chat_id, { metadata: extraMetadata });
 						}
 					}
 				}
@@ -2577,6 +2599,7 @@
 
 	const stopResponse = async (processQueue = true) => {
 		if (taskIds) {
+			onStreamAbort($chatId);
 			if ($chatId) {
 				await stopTasksByChatId(localStorage.token, $chatId).catch((error) => {
 					toast.error(`${error}`);
@@ -2779,6 +2802,7 @@
 					params: params,
 					history: history,
 					messages: createMessagesList(history, history.currentId),
+					...(Object.keys(extraMetadata).length > 0 ? { metadata: extraMetadata } : {}),
 					tags: [],
 					timestamp: Date.now()
 				},
@@ -2788,7 +2812,7 @@
 			_chatId = chat.id;
 			await chatId.set(_chatId);
 
-			window.history.replaceState(history.state, '', `/c/${_chatId}`);
+			window.history.replaceState(history.state, '', `${chatRoutePrefix}/${_chatId}`);
 
 			await tick();
 
@@ -2813,7 +2837,8 @@
 					history: history,
 					messages: createMessagesList(history, history.currentId),
 					params: params,
-					files: chatFiles
+					files: chatFiles,
+					...(Object.keys(extraMetadata).length > 0 ? { metadata: extraMetadata } : {})
 				});
 			}
 		}

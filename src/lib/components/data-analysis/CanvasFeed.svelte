@@ -1,0 +1,248 @@
+<script lang="ts">
+	import { afterUpdate, createEventDispatcher, getContext, onMount } from 'svelte';
+	import type { Writable } from 'svelte/store';
+	import ChartCardCanvas from './ChartCardCanvas.svelte';
+	import { isNearBottom, scrollToBottom } from './scroll-utils';
+	import { workspaceEvents } from '$lib/stores/data-analysis';
+
+	type OutputPart = {
+		text?: string;
+	};
+
+	type ToolOutput = {
+		type?: string;
+		call_id?: string;
+		name?: string;
+		arguments?: string | Record<string, unknown>;
+		output?: OutputPart[];
+	};
+
+	type ChatMessage = {
+		id?: string;
+		output?: ToolOutput[];
+	};
+
+	type ChartCard = {
+		chartId: string;
+		url: string;
+		messageId: string;
+		title: string;
+		chartType: string;
+		datasetId: string;
+		fields: string;
+		method: string;
+		notes: string;
+	};
+
+	export let messages: ChatMessage[] = [];
+	export let isStreaming = false;
+
+	const i18n =
+		getContext<Writable<{ t: (key: string, options?: Record<string, unknown>) => string }>>('i18n');
+	const dispatch = createEventDispatcher<{
+		'chart-rendered': ChartCard;
+		'chart-viewed': { chartId: string; chartType: string };
+	}>();
+	let scroller: HTMLDivElement;
+	let showJump = false;
+	let highlighted = '';
+	let previousCount = 0;
+
+	const parseMaybeJson = (value: unknown): Record<string, any> | null => {
+		if (typeof value !== 'string') {
+			return value && typeof value === 'object' ? (value as Record<string, any>) : null;
+		}
+		try {
+			return JSON.parse(value);
+		} catch {
+			try {
+				return JSON.parse(value.replaceAll("'", '"'));
+			} catch {
+				return null;
+			}
+		}
+	};
+
+	const textFromOutput = (item?: ToolOutput) =>
+		(item?.output ?? []).map((part: OutputPart) => part.text ?? '').join('');
+
+	const csvOrList = (value: unknown) => {
+		if (Array.isArray(value)) return value.join(', ');
+		return typeof value === 'string' ? value : '';
+	};
+
+	const chartFromPair = (
+		call: ToolOutput,
+		result: ToolOutput | undefined,
+		messageId = ''
+	): ChartCard | null => {
+		if (call?.name !== 'render_chart') return null;
+		const args = parseMaybeJson(call.arguments) ?? {};
+		const text = textFromOutput(result);
+		const payload = parseMaybeJson(text);
+		const attachment = payload?.attachment ?? {};
+		const explanation = attachment?.metadata?.explanation ?? {};
+		const fallbackFields = `${args.x ?? ''}${args.y ? `, ${args.y}` : ''}`;
+		const explainedFields = csvOrList(explanation.fields);
+		const fields = args.explanation_fields ?? explainedFields;
+		const url =
+			attachment.url ?? text.match(/'url': '([^']+)'/)?.[1] ?? text.match(/"url": "([^"]+)"/)?.[1];
+		// Derive the id from the url so the card id, <img> target and
+		// chart.rendered event always reference the file that actually exists.
+		// Falling back to attachment.id / regex only when the url has no id.
+		const chartId =
+			url?.match(/charts\/([0-9a-fA-F]+)\.png/)?.[1] ??
+			attachment.id ??
+			text.match(/'chart_id': '([^']+)'/)?.[1] ??
+			text.match(/"chart_id": "([^"]+)"/)?.[1];
+		if (!chartId || !url) return null;
+		return {
+			chartId,
+			url,
+			messageId,
+			title: args.title ?? attachment?.metadata?.title ?? 'Rendered chart',
+			chartType: args.chart_type ?? attachment?.metadata?.chart_type ?? 'chart',
+			datasetId: args.query_id ?? explanation.source ?? '',
+			fields: fields || fallbackFields,
+			method: args.explanation_method ?? explanation.method ?? '',
+			notes: args.explanation_notes ?? explanation.notes ?? ''
+		};
+	};
+
+	$: cards = messages.flatMap((message: ChatMessage) => {
+		const output = message.output ?? [];
+		const results = new Map(
+			output
+				.filter((item: ToolOutput) => item.type === 'function_call_output' && item.call_id)
+				.map((item: ToolOutput) => [item.call_id, item])
+		);
+		return output
+			.filter((item: ToolOutput) => item.type === 'function_call')
+			.map((call: ToolOutput) => chartFromPair(call, results.get(call.call_id), message.id))
+			.filter((card: ChartCard | null): card is ChartCard => Boolean(card));
+	});
+
+	onMount(() => {
+		const off = workspaceEvents.on('focusCanvasCard', ({ attachmentId }) => {
+			const target = document.getElementById(`chart-${attachmentId}`);
+			target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+			highlighted = attachmentId;
+			setTimeout(() => {
+				if (highlighted === attachmentId) highlighted = '';
+			}, 1500);
+		});
+		return off;
+	});
+
+	afterUpdate(() => {
+		if (!scroller || cards.length === previousCount) return;
+		const shouldStick = isNearBottom(scroller, 200) || previousCount === 0;
+		previousCount = cards.length;
+		const newest = cards.at(-1);
+		if (newest) dispatch('chart-rendered', newest);
+		if (shouldStick) scrollToBottom(scroller);
+		else showJump = true;
+	});
+</script>
+
+<section class="canvas">
+	<header>
+		<div>
+			<h2>{$i18n.t('Analysis Canvas')}</h2>
+			<p>{cards.length} {$i18n.t('charts')}</p>
+		</div>
+		{#if isStreaming}<span>{$i18n.t('Streaming')}</span>{/if}
+	</header>
+
+	<div bind:this={scroller} class="feed">
+		{#if cards.length === 0}
+			<div class="empty">{$i18n.t('Charts generated by render_chart will appear here.')}</div>
+		{:else}
+			{#each cards as card (card.chartId)}
+				<ChartCardCanvas
+					{card}
+					highlighted={highlighted === card.chartId}
+					on:view={(e) => dispatch('chart-viewed', e.detail)}
+				/>
+			{/each}
+		{/if}
+	</div>
+
+	{#if showJump}
+		<button
+			class="jump"
+			type="button"
+			on:click={() => {
+				scrollToBottom(scroller);
+				showJump = false;
+			}}
+		>
+			{$i18n.t('New charts')}
+		</button>
+	{/if}
+</section>
+
+<style>
+	.canvas {
+		block-size: 100%;
+		display: grid;
+		grid-template-rows: auto minmax(0, 1fr);
+		position: relative;
+	}
+
+	header {
+		min-block-size: 64px;
+		padding: 14px 18px;
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		border-block-end: 1px solid var(--da-border);
+		background: var(--da-panel);
+	}
+
+	h2,
+	p {
+		margin: 0;
+	}
+
+	h2 {
+		font-size: 16px;
+		font-weight: 700;
+	}
+
+	p,
+	header span {
+		color: var(--da-text-muted);
+		font-size: 12px;
+	}
+
+	.feed {
+		overflow: auto;
+		padding: 18px;
+		display: grid;
+		align-content: start;
+		gap: 14px;
+	}
+
+	.empty {
+		border: 1px dashed var(--da-border);
+		border-radius: var(--da-radius);
+		background: var(--da-panel);
+		color: var(--da-text-muted);
+		padding: 28px;
+		font-size: 14px;
+	}
+
+	.jump {
+		position: absolute;
+		inset-inline: 0;
+		margin: auto;
+		inset-block-end: 18px;
+		inline-size: max-content;
+		border: 1px solid var(--da-accent);
+		background: var(--da-accent);
+		color: var(--da-panel);
+		border-radius: 999px;
+		padding: 8px 12px;
+	}
+</style>

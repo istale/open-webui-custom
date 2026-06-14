@@ -1,0 +1,31 @@
+{
+  "active_branch_message_ids": [
+    "user-1",
+    "assistant-chart-1"
+  ],
+  "canvas_card_parse": {
+    "chartId": "a27bbf229a124cbfb054f22f1519c1ea",
+    "chartType": "control",
+    "fields": "timestamp,temperature_c,spec_target,spec_usl,spec_lsl",
+    "title": "CP-7 Temperature Control",
+    "url": "/api/v1/data-analysis/charts/a27bbf229a124cbfb054f22f1519c1ea.png"
+  },
+  "chart_id": "a27bbf229a124cbfb054f22f1519c1ea",
+  "chart_url": "/api/v1/data-analysis/charts/a27bbf229a124cbfb054f22f1519c1ea.png",
+  "datasets_count": 2,
+  "png_exists_before_reload": true,
+  "png_size_bytes": 63174,
+  "prompt": "Show a temperature control chart for sensor_readings using timestamp and temperature_c.",
+  "query_id": "ab7c5fa9f4d443388c899282a95e8fd6",
+  "query_rows": 6,
+  "same_process_reload_image_path_exists": true,
+  "schema_columns": 9,
+  "sibling_excluded": true,
+  "thumb_exists": true,
+  "tool_sequence": [
+    "list_datasets",
+    "get_dataset_schema",
+    "query_dataset",
+    "render_chart"
+  ]
+}

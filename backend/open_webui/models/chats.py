@@ -1447,6 +1447,8 @@ class ChatTable:
                 await db.execute(delete(Chat).filter_by(id=id))
                 await db.commit()
 
+                from open_webui.models.data_analysis_events import DataAnalysisEvents
+                await DataAnalysisEvents.mark_deleted_safely(chat_id=id, db=db)
                 return True and await self.delete_shared_chat_by_chat_id(id, db=db)
         except Exception:
             return False
@@ -1459,6 +1461,8 @@ class ChatTable:
                 await db.execute(delete(Chat).filter_by(id=id, user_id=user_id))
                 await db.commit()
 
+                from open_webui.models.data_analysis_events import DataAnalysisEvents
+                await DataAnalysisEvents.mark_deleted_safely(chat_id=id, db=db)
                 return True and await self.delete_shared_chat_by_chat_id(id, db=db)
         except Exception:
             return False
@@ -1480,6 +1484,8 @@ class ChatTable:
                 await db.execute(delete(Chat).filter_by(user_id=user_id))
                 await db.commit()
 
+                from open_webui.models.data_analysis_events import DataAnalysisEvents
+                await DataAnalysisEvents.mark_deleted_by_user_id_safely(user_id=user_id, db=db)
                 return True
         except Exception:
             return False
